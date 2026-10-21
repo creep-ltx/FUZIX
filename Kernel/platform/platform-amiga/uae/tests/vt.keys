@@ -1,0 +1,29 @@
+wait Enter new date
+key Return
+wait Enter new time
+key Return
+wait login:
+type root
+key Return
+sleep 3
+type ls -l /bin; echo one; echo two
+key Return
+sleep 6
+shot vt1
+amiga F2
+sleep 2
+shot vt2
+type root
+key Return
+sleep 3
+type echo this is tty2; tty
+key Return
+sleep 3
+shot vt2b
+alt F3
+sleep 2
+shot vt3
+amiga F1
+sleep 2
+shot vt1b
+quit

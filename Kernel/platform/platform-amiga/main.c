@@ -64,12 +64,14 @@ void amiga_hw_init(void)
 	gayle_quiet();
 	serial_init();
 	video_init();
+	vt_switch_init();
 	kbd_init();
 }
 
 /* Vertical blank: the 50Hz tick */
 void plt_vblank(void)
 {
+	video_vblank();
 	timer_interrupt();
 	fd_timer();
 }

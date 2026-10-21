@@ -29,8 +29,11 @@
 /* Vertical blank: 50Hz on PAL, 60Hz on NTSC (we assume PAL) */
 #define TICKSPERSEC 50
 
-/* Video terminal on tty1, Paula serial on tty2 */
+/* Four screens on tty1-tty4 (Amiga+F1..F4), Paula serial on tty5 */
 #define CONFIG_VT
+#define CONFIG_VT_MULTI
+#define MAX_VT		4
+#define SERIAL_TTY	5
 #define CONFIG_FONT8X8
 #define VT_WIDTH	80
 #define VT_HEIGHT	32
@@ -48,7 +51,7 @@ extern unsigned short amiga_root_dev;
 #define BOOTDEVICE	amiga_root_dev
 
 /* Device parameters */
-#define NUM_DEV_TTY 2
+#define NUM_DEV_TTY 5
 #define TTYDEV   BOOT_TTY /* Device used by kernel for messages, panics */
 
 #define NBUFS    16       /* Number of block buffers */

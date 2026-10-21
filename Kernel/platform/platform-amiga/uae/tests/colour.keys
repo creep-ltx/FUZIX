@@ -1,0 +1,19 @@
+wait Enter new date
+key Return
+wait Enter new time
+key Return
+wait login:
+type root
+key Return
+sleep 3
+type echo -e '\0033bJred \0033bLgreen \0033bNyellow \0033bIblue \0033bKmagenta \0033bMcyan \0033bG\0033cA on blue \0033cD on green \0033c@ \0033aPbold\0033a@ \0033aAinverse\0033a@ \0033aBunder\0033a@ normal'
+key Return
+sleep 4
+shot colour
+alt F3
+sleep 2
+shot alt3
+amiga F4
+sleep 2
+shot amiga4
+quit

@@ -1,3 +1,7 @@
+wait Enter new date
+key Return
+wait Enter new time
+key Return
 wait Install Fuzix on it now
 type y
 key Return

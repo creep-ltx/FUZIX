@@ -9,6 +9,8 @@
  *   -k NAME       one key: Return Escape Up Down Left Right BackSpace
  *                 Tab Help Delete F1..F10
  *   -c X          Ctrl+X
+ *   -m NAME       Amiga+key (the left Windows key), NAME as for -k
+ *   -a NAME       Alt+key, NAME as for -k
  *   -s ms         sleep
  */
 #define _GNU_SOURCE
@@ -54,6 +56,8 @@ static void sleep_ms(int ms)
 
 #define MOD_SHIFT 1
 #define MOD_CTRL  4
+#define MOD_ALT   8
+#define MOD_LOGO  64
 
 static void press(int code, int mods)
 {
@@ -62,12 +66,20 @@ static void press(int code, int mods)
 		zwp_virtual_keyboard_v1_key(kbd, now_ms(), 42, 1);
 	if (mods & MOD_CTRL)
 		zwp_virtual_keyboard_v1_key(kbd, now_ms(), 29, 1);
+	if (mods & MOD_ALT)
+		zwp_virtual_keyboard_v1_key(kbd, now_ms(), 56, 1);
+	if (mods & MOD_LOGO)
+		zwp_virtual_keyboard_v1_key(kbd, now_ms(), 125, 1);
 	wl_display_roundtrip(dpy);
 	sleep_ms(delay_ms / 2);
 	zwp_virtual_keyboard_v1_key(kbd, now_ms(), code, 1);
 	wl_display_roundtrip(dpy);
 	sleep_ms(delay_ms);
 	zwp_virtual_keyboard_v1_key(kbd, now_ms(), code, 0);
+	if (mods & MOD_LOGO)
+		zwp_virtual_keyboard_v1_key(kbd, now_ms(), 125, 0);
+	if (mods & MOD_ALT)
+		zwp_virtual_keyboard_v1_key(kbd, now_ms(), 56, 0);
 	if (mods & MOD_CTRL)
 		zwp_virtual_keyboard_v1_key(kbd, now_ms(), 29, 0);
 	if (mods & MOD_SHIFT)
@@ -179,7 +191,9 @@ int main(int argc, char **argv)
 			delay_ms = atoi(argv[++i]);
 		} else if (!strcmp(a, "-s") && i + 1 < argc) {
 			sleep_ms(atoi(argv[++i]));
-		} else if (!strcmp(a, "-k") && i + 1 < argc) {
+		} else if ((!strcmp(a, "-k") || !strcmp(a, "-m") ||
+			    !strcmp(a, "-a")) && i + 1 < argc) {
+			mods = a[1] == 'm' ? MOD_LOGO : a[1] == 'a' ? MOD_ALT : 0;
 			a = argv[++i];
 			for (j = 0; names[j].n; j++)
 				if (!strcmp(names[j].n, a))
@@ -188,7 +202,7 @@ int main(int argc, char **argv)
 				fprintf(stderr, "vkey: unknown key %s\n", a);
 				return 1;
 			}
-			press(names[j].code, 0);
+			press(names[j].code, mods);
 		} else if (!strcmp(a, "-c") && i + 1 < argc) {
 			code = lookup(argv[++i][0], &mods);
 			if (code >= 0)

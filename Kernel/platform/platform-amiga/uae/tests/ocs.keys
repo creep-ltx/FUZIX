@@ -1,0 +1,12 @@
+wait login:
+type root
+key Return
+sleep 3
+type ls -l /bin; echo -e '\0033bJred \0033aAinverse\0033a@ normal'
+key Return
+sleep 12
+shot ocs1
+amiga F2
+sleep 3
+shot ocs2
+quit

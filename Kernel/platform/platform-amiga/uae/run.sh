@@ -17,7 +17,8 @@
 #   KEEP_DISK=1                 keep the disks the last run left
 #   KEYS=<file>                 typed on the Amiga keyboard (uae/vkey):
 #                               lines "sleep N", "type TEXT", "key NAME",
-#                               "ctrl X", "wait TEXT" (until TEXT is on
+#                               "ctrl X", "amiga F2", "alt F2",
+#                               "wait TEXT" (until TEXT is on
 #                               screen, by OCR; up to 400 s), "shot NAME"
 #                               (OUT/NAME.png), "quit" (end the run)
 #
@@ -109,6 +110,8 @@ if [ -n "${KEYS:-}" ] && [ -n "$DISP" ]; then
 		type) WAYLAND_DISPLAY=$DISP "$HERE/vkey/vkey" "$arg" </dev/null ;;
 		key) WAYLAND_DISPLAY=$DISP "$HERE/vkey/vkey" -k "$arg" </dev/null ;;
 		ctrl) WAYLAND_DISPLAY=$DISP "$HERE/vkey/vkey" -c "$arg" </dev/null ;;
+		amiga) WAYLAND_DISPLAY=$DISP "$HERE/vkey/vkey" -m "$arg" </dev/null ;;
+		alt) WAYLAND_DISPLAY=$DISP "$HERE/vkey/vkey" -a "$arg" </dev/null ;;
 		# then a second more: text on screen is not yet a program
 		# reading its input (keys typed at once were lost)
 		wait) python3 "$HERE/waittext.py" "$DISP" 400 "$arg" </dev/null ||

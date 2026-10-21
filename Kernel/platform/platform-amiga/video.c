@@ -1,8 +1,19 @@
 /*
- *	Text screen: 640x256 PAL hires, one bitplane, 80x32 characters of
- *	8x8. The screen and a small Copper list sit at the top of chip RAM.
- *	One bitplane makes a character cell one byte wide, so drawing is
- *	eight byte stores.
+ *	Text screens: 640x256 PAL hires, 80x32 characters of 8x8, one per
+ *	virtual console (tty1-tty4), all at the top of chip RAM. The Copper
+ *	shows one of them; Amiga+F1..F4 picks which.
+ *
+ *	AGA machines get four bitplanes (16 colours, the vt's ink and paper)
+ *	fetched 64 bits at a time, so the display leaves the CPU most of the
+ *	chip bus; older chips get one plane, as before.
+ *
+ *	The planes of a line lie one after the other (interleaved), so a
+ *	character cell is a column of bytes, one per plane and line.
+ *
+ *	Scrolling copies nothing: each screen is a ring of 32 text rows and
+ *	the Copper starts the display at the top row, then jumps back to
+ *	the buffer's start where the ring wraps. Clearing rows is the
+ *	blitter's job.
  */
 #include <kernel.h>
 #include <kdata.h>
@@ -11,14 +22,32 @@
 
 #define COLS		80
 #define ROWS		32
-#define LINEBYTES	COLS
-#define ROWBYTES	(LINEBYTES * 8)
-#define SCREENBYTES	(ROWBYTES * ROWS)	/* 20480 */
-#define COPPERBYTES	64
+#define MAXPLANES	4
+#define COPWORDS	48		/* one Copper list */
 
 uint32_t video_base;
-static uint8_t *screen;
-static volatile uint16_t *copper;
+
+static uint8_t planes;			/* 4 on AGA, else 1 */
+static uint16_t linebytes;		/* one pixel line, every plane */
+static uint16_t rowbytes;		/* one text row */
+static uint32_t screenbytes;
+
+struct vscreen {
+	uint8_t *base;
+	uint8_t top;			/* the ring row shown as row 0 */
+	int8_t cur_y, cur_x;		/* the cursor drawn, or -1 */
+};
+static struct vscreen vs[MAX_VT];
+static struct vscreen *act = vs;	/* the one being written */
+static uint8_t shown;			/* the one on display */
+
+/* Two Copper lists: a new one is built in the list the Copper is not
+   running, and takes over at the next vertical blank */
+static uint16_t *coplist[2];
+static volatile uint8_t cop_run, cop_next;
+
+/* Per plane: what a set and a clear font bit become (0x00 or 0xFF) */
+static uint8_t fg[MAXPLANES], bg[MAXPLANES];
 
 extern const unsigned char fontdata_8x8[];
 
@@ -41,24 +70,6 @@ static const uint8_t latin1_cp437[96] = {
 /* The Kickstart ROM's Topaz 8 as the same 256 x 8 byte table */
 uint8_t romfont[2048];
 uint8_t have_romfont;
-
-static int8_t cur_y = -1, cur_x;
-
-static uint8_t *cell(int8_t y, int8_t x)
-{
-	return screen + (uint16_t)y * ROWBYTES + x;
-}
-
-static void invert_cell(int8_t y, int8_t x)
-{
-	uint8_t *p = cell(y, x);
-	uint8_t i;
-
-	for (i = 0; i < 8; i++) {
-		*p ^= 0xFF;
-		p += LINEBYTES;
-	}
-}
 
 /*
  *	Find Topaz 8 in the Kickstart ROM: the string "topaz.font", then the
@@ -172,46 +183,139 @@ static uint8_t find_rom_font(void)
 	return 0;
 }
 
+/* The IGRB colours: 1 blue, 2 red, 4 green, 8 bright */
+static uint16_t igrb(uint8_t i)
+{
+	uint16_t on = (i & 8) ? 0xF : 0xA;
+	uint16_t off = (i & 8) ? 0x5 : 0x0;
+
+	return ((i & 2) ? on : off) << 8 | ((i & 4) ? on : off) << 4 |
+	       ((i & 1) ? on : off);
+}
+
+static void blit_wait(void)
+{
+	(void)DMACONR;			/* the first read can be early */
+	while (DMACONR & 0x4000)	/* BBUSY */
+		;
+}
+
+static uint16_t *set_planes(uint16_t *c, uint8_t *p)
+{
+	uint8_t k;
+	uint32_t a;
+
+	for (k = 0; k < planes; k++) {
+		a = (uint32_t)p + k * COLS;
+		*c++ = 0x00E0 + 4 * k; *c++ = a >> 16;
+		*c++ = 0x00E2 + 4 * k; *c++ = a & 0xFFFF;
+	}
+	return c;
+}
+
+/* A Copper list for the screen on display: its top row first, and
+   where the ring wraps (at the end of the line before, after that
+   line's fetch) the buffer's start */
+static void copper_build(void)
+{
+	struct vscreen *v = vs + shown;
+	irqflags_t irq;
+	uint16_t *c;
+	uint16_t line;
+	uint8_t n;
+
+	irq = di();
+	n = cop_run ^ 1;
+	c = coplist[n];
+	c = set_planes(c, v->base + v->top * rowbytes);
+	if (v->top) {
+		line = 0x2C + (ROWS - v->top) * 8 - 1;
+		if (line > 0xFF) {
+			*c++ = 0xFFDF; *c++ = 0xFFFE;	/* past line 255 */
+		}
+		*c++ = (line & 0xFF) << 8 | 0xE1; *c++ = 0xFFFE;
+		c = set_planes(c, v->base);
+	}
+	*c++ = 0xFFFF; *c++ = 0xFFFE;
+	COP1LCH = (uint32_t)coplist[n] >> 16;
+	COP1LCL = (uint32_t)coplist[n] & 0xFFFF;
+	cop_next = n;
+	irqrestore(irq);
+}
+
+/* At the vertical blank the Copper starts the list COP1LC names */
+void video_vblank(void)
+{
+	cop_run = cop_next;
+}
+
+static uint8_t is_aga(void)
+{
+	uint8_t i;
+
+	/* Lisa answers 0xF8; OCS Denise has no id register and gives
+	   whatever was last on the bus */
+	for (i = 0; i < 16; i++)
+		if ((LISAID & 0xFF) != 0xF8)
+			return 0;
+	return 1;
+}
+
 void video_init(void)
 {
-	uint32_t *p;
+	uint32_t *p, n;
 	uint16_t i;
-	volatile uint16_t *c;
 
-	video_base = (chip_top - SCREENBYTES - COPPERBYTES) & ~0xFF;
-	screen = (uint8_t *)video_base;
-	copper = (volatile uint16_t *)(video_base + SCREENBYTES);
+	planes = is_aga() ? 4 : 1;
+	linebytes = COLS * planes;
+	rowbytes = linebytes * 8;
+	screenbytes = (uint32_t)rowbytes * ROWS;
 
-	p = (uint32_t *)screen;
-	for (i = 0; i < SCREENBYTES / 4; i++)
+	/* 64-bit fetches want the planes on 8-byte boundaries */
+	video_base = (chip_top - MAX_VT * screenbytes - 4 * COPWORDS) & ~0xFFUL;
+	for (i = 0; i < MAX_VT; i++) {
+		vs[i].base = (uint8_t *)(video_base + i * screenbytes);
+		vs[i].cur_y = -1;
+	}
+	coplist[0] = (uint16_t *)(video_base + MAX_VT * screenbytes);
+	coplist[1] = coplist[0] + COPWORDS;
+
+	p = (uint32_t *)video_base;
+	for (n = MAX_VT * screenbytes / 4; n; n--)
 		*p++ = 0;
 
-	/* The bitplane pointer runs on during the frame: the Copper sets
-	   it back at the top of every frame */
-	c = copper;
-	*c++ = 0x00E0; *c++ = video_base >> 16;
-	*c++ = 0x00E2; *c++ = video_base & 0xFFFF;
-	*c++ = 0xFFFF; *c++ = 0xFFFE;
-
-	BPLCON0 = 0x9200;	/* hires, one bitplane, colour burst */
+	if (planes == 4) {
+		BPLCON0 = 0xC200;	/* hires, four bitplanes, colour */
+		FMODE = 3;		/* 64-bit bitplane fetches */
+		DDFSTRT = 0x0030;	/* the hires values for FMODE 3 */
+		DDFSTOP = 0x00C0;
+	} else {
+		BPLCON0 = 0x9200;	/* hires, one bitplane, colour */
+		FMODE = 0;
+		DDFSTRT = 0x003C;
+		DDFSTOP = 0x00D4;
+	}
 	BPLCON1 = 0;
 	BPLCON2 = 0;
 	BPLCON3 = 0x0C00;	/* AGA: ECS-compatible defaults */
 	BPLCON4 = 0x0011;
-	FMODE = 0;		/* OCS fetch mode on AGA */
-	BPL1MOD = 0;
-	BPL2MOD = 0;
-	DDFSTRT = 0x003C;
-	DDFSTOP = 0x00D4;
+	BPL1MOD = linebytes - COLS;
+	BPL2MOD = linebytes - COLS;
 	DIWSTRT = 0x2C81;
 	DIWSTOP = 0x2CC1;
-	COLOR(0) = 0x0000;
-	COLOR(1) = 0x0CCC;
-	COP1LCH = (uint32_t)copper >> 16;
-	COP1LCL = (uint32_t)copper & 0xFFFF;
+	if (planes == 4)
+		for (i = 0; i < 16; i++)
+			COLOR(i) = igrb(i);
+	else {
+		COLOR(0) = 0x0000;
+		COLOR(1) = 0x0CCC;
+	}
+	cop_run = 1;
+	copper_build();
+	cop_run = cop_next;
 	COPJMP1 = 0;
-	/* SET | DMAEN | BPLEN | COPEN */
-	DMACON = 0x8000 | 0x0200 | 0x0100 | 0x0080;
+	/* SET | DMAEN | BPLEN | COPEN | BLTEN */
+	DMACON = 0x8000 | 0x0200 | 0x0100 | 0x0080 | 0x0040;
 
 	memcpy(fuzixfont, fontdata_8x8, 0x80 * 8);
 	memset(fuzixfont + 0x80 * 8, 0, 0x20 * 8);	/* C1 controls */
@@ -221,7 +325,45 @@ void video_init(void)
 	memcpy(vtfont, fuzixfont, sizeof(vtfont));
 	have_romfont = find_rom_font();
 
+	vtattr_cap = VTA_INVERSE | VTA_UNDERLINE;
+	if (planes > 1)
+		vtattr_cap |= VTA_BOLD;
 	vtinit();
+}
+
+/* Writing goes to screen n (tty n + 1) */
+void set_active_vt(uint8_t n)
+{
+	act = vs + n;
+}
+
+/* Screen n goes on display */
+void set_visible_vt(uint8_t n)
+{
+	shown = n;
+	copper_build();
+}
+
+static uint8_t *cell(int8_t y, int8_t x)
+{
+	uint8_t r = y + act->top;
+
+	if (r >= ROWS)
+		r -= ROWS;
+	return act->base + (uint16_t)r * rowbytes + x;
+}
+
+static void invert_cell(int8_t y, int8_t x)
+{
+	uint8_t *p = cell(y, x);
+	uint8_t i, k;
+
+	blit_wait();
+	for (i = 0; i < 8; i++) {
+		for (k = 0; k < planes; k++)
+			p[k * COLS] ^= 0xFF;
+		p += linebytes;
+	}
 }
 
 void plot_char(int8_t y, int8_t x, uint16_t c)
@@ -229,77 +371,127 @@ void plot_char(int8_t y, int8_t x, uint16_t c)
 	uint8_t *p = cell(y, x);
 	const uint8_t *f = vtfont + ((c & 0xFF) << 3);
 	uint8_t inv = (vtattr & VTA_INVERSE) ? 0xFF : 0;
-	uint8_t i;
+	uint8_t i, k, b;
 
+	blit_wait();
 	for (i = 0; i < 8; i++) {
-		uint8_t b = *f++;
+		b = *f++;
 		if (i == 7 && (vtattr & VTA_UNDERLINE))
 			b = 0xFF;
-		*p = b ^ inv;
-		p += LINEBYTES;
+		b ^= inv;
+		if (planes == 1)
+			*p = b;
+		else
+			for (k = 0; k < MAXPLANES; k++)
+				p[k * COLS] = (b & fg[k]) | (~b & bg[k]);
+		p += linebytes;
+	}
+}
+
+/* Ring rows r to r + n - 1 (no wrap) to the paper colour: one blit a
+   plane, the A channel off so its data register is the constant */
+static void blit_clear(uint8_t r, uint8_t n)
+{
+	uint8_t *p = act->base + (uint16_t)r * rowbytes;
+	uint8_t k;
+
+	for (k = 0; k < planes; k++) {
+		blit_wait();
+		BLTCON0 = 0x01F0;		/* D = A */
+		BLTCON1 = 0;
+		BLTAFWM = 0xFFFF;
+		BLTALWM = 0xFFFF;
+		BLTADAT = bg[k] ? 0xFFFF : 0;
+		BLTDMOD = linebytes - COLS;
+		BLTDPTH = (uint32_t)(p + k * COLS) >> 16;
+		BLTDPTL = (uint32_t)(p + k * COLS) & 0xFFFF;
+		BLTSIZE = ((uint16_t)n * 8) << 6 | (COLS / 2);
 	}
 }
 
 void clear_lines(int8_t y, int8_t ct)
 {
-	uint32_t *p = (uint32_t *)cell(y, 0);
-	uint16_t n = (uint16_t)ct * (ROWBYTES / 4);
+	uint8_t r = y + act->top, n;
 
-	while (n--)
-		*p++ = 0;
+	if (ct <= 0)
+		return;
+	if (r >= ROWS)
+		r -= ROWS;
+	/* The ring may wrap inside the range: two parts */
+	n = ROWS - r;
+	if (n > ct)
+		n = ct;
+	blit_clear(r, n);
+	if (ct > n)
+		blit_clear(0, ct - n);
 }
 
 void clear_across(int8_t y, int8_t x, int16_t l)
 {
 	uint8_t *p = cell(y, x);
-	uint8_t i;
+	uint8_t i, k;
 	int16_t j;
 
+	if (l <= 0)
+		return;
+	blit_wait();
 	for (i = 0; i < 8; i++) {
-		for (j = 0; j < l; j++)
-			p[j] = 0;
-		p += LINEBYTES;
+		for (k = 0; k < planes; k++)
+			for (j = 0; j < l; j++)
+				p[k * COLS + j] = bg[k];
+		p += linebytes;
 	}
 }
 
+/* The vt clears the row that comes in afterwards */
 void scroll_up(void)
 {
-	uint32_t *d = (uint32_t *)screen;
-	uint32_t *s = (uint32_t *)(screen + ROWBYTES);
-	uint16_t n = (SCREENBYTES - ROWBYTES) / 4;
-
-	while (n--)
-		*d++ = *s++;
+	if (++act->top == ROWS)
+		act->top = 0;
+	if (act == vs + shown)
+		copper_build();
 }
 
 void scroll_down(void)
 {
-	uint32_t *d = (uint32_t *)(screen + SCREENBYTES);
-	uint32_t *s = (uint32_t *)(screen + SCREENBYTES - ROWBYTES);
-	uint16_t n = (SCREENBYTES - ROWBYTES) / 4;
-
-	while (n--)
-		*--d = *--s;
+	act->top = act->top ? act->top - 1 : ROWS - 1;
+	if (act == vs + shown)
+		copper_build();
 }
 
 void cursor_on(int8_t y, int8_t x)
 {
-	cur_y = y;
-	cur_x = x;
+	act->cur_y = y;
+	act->cur_x = x;
 	invert_cell(y, x);
 }
 
 void cursor_off(void)
 {
-	if (cur_y >= 0)
-		invert_cell(cur_y, cur_x);
-	cur_y = -1;
+	if (act->cur_y >= 0)
+		invert_cell(act->cur_y, act->cur_x);
+	act->cur_y = -1;
 }
 
 void cursor_disable(void)
 {
 }
 
+/* Ink and paper (IGRB), bold as the bright ink. One plane: white on
+   black whatever the colours */
 void vtattr_notify(void)
 {
+	uint8_t ink = vtink & 15, paper = vtpaper & 15, k;
+
+	if (vtattr & VTA_BOLD)
+		ink |= 8;
+	if (planes == 1) {
+		fg[0] = 0xFF;
+		bg[0] = 0;
+		return;
+	}
+	for (k = 0; k < MAXPLANES; k++) {
+		fg[k] = (ink >> k) & 1 ? 0xFF : 0;
+		bg[k] = (paper >> k) & 1 ? 0xFF : 0;
+	}
 }

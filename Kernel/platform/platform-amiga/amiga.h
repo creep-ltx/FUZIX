@@ -26,6 +26,17 @@
 #define BPLCON4		CUSTOM(0x10C)
 #define FMODE		CUSTOM(0x1FC)
 #define COLOR(n)	CUSTOM(0x180 + 2 * (n))
+#define DMACONR		CUSTOM(0x002)
+#define LISAID		CUSTOM(0x07C)
+#define BLTCON0		CUSTOM(0x040)
+#define BLTCON1		CUSTOM(0x042)
+#define BLTAFWM		CUSTOM(0x044)
+#define BLTALWM		CUSTOM(0x046)
+#define BLTDPTH		CUSTOM(0x054)
+#define BLTDPTL		CUSTOM(0x056)
+#define BLTSIZE		CUSTOM(0x058)
+#define BLTDMOD		CUSTOM(0x066)
+#define BLTADAT		CUSTOM(0x074)
 
 #define INTF_RBF	0x0800
 
@@ -46,6 +57,10 @@ extern uint32_t video_base;
 
 void serial_init(void);
 void video_init(void);
+void video_vblank(void);
+void vt_switch_init(void);
+void set_active_vt(uint8_t n);
+void set_visible_vt(uint8_t n);
 void kbd_init(void);
 void kbd_interrupt(void);
 void serial_interrupt(void);

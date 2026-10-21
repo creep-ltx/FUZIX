@@ -17,7 +17,9 @@ WinUAE:  (not tried yet) A1200 with Kickstart 3.1. Hard drives: Add
          Optional: the battery-backed clock (Chipset settings) MSM6242B,
          so FUZIX gets the date without asking.
 
-Log in as root. Commands: keymap (keyboard layout), fontprefs (FUZIX's
+Log in as root. Four screens, each with its own login: Amiga+F1 to F4
+(the left Windows key in FS-UAE, which keeps left Alt for itself).
+Commands: keymap (keyboard layout), fontprefs (FUZIX's
 font or the ROM's Topaz), setup, and the usual Unix tools.
 
 Source and licence (GPL v2): https://github.com/creep-ltx/FUZIX (branch amiga)

@@ -1,6 +1,7 @@
 /*
- *	Amiga terminals: tty1 is the screen and keyboard, tty2 is Paula's
- *	serial port. Kernel messages go to both, so a serial cable (or the
+ *	Amiga terminals: tty1-tty4 are screens sharing the keyboard
+ *	(Amiga+F1..F4 picks one), tty5 is Paula's serial port. Kernel
+ *	messages go to tty1 and the serial port, so a serial cable (or the
  *	emulator's serial log) shows the boot even with no screen.
  */
 #include <kernel.h>
@@ -14,20 +15,34 @@
 
 static unsigned char tbuf1[TTYSIZ];
 static unsigned char tbuf2[TTYSIZ];
+static unsigned char tbuf3[TTYSIZ];
+static unsigned char tbuf4[TTYSIZ];
+static unsigned char tbuf5[TTYSIZ];
 
 struct s_queue ttyinq[NUM_DEV_TTY + 1] = {	/* ttyinq[0] is never used */
 	{NULL, NULL, NULL, 0, 0, 0},
 	{tbuf1, tbuf1, tbuf1, TTYSIZ, 0, TTYSIZ / 2},
 	{tbuf2, tbuf2, tbuf2, TTYSIZ, 0, TTYSIZ / 2},
+	{tbuf3, tbuf3, tbuf3, TTYSIZ, 0, TTYSIZ / 2},
+	{tbuf4, tbuf4, tbuf4, TTYSIZ, 0, TTYSIZ / 2},
+	{tbuf5, tbuf5, tbuf5, TTYSIZ, 0, TTYSIZ / 2},
 };
 
 tcflag_t termios_mask[NUM_DEV_TTY + 1] = {
 	0,
 	_CSYS,
+	_CSYS,
+	_CSYS,
+	_CSYS,
 	_CSYS | CBAUD,
 };
 
 uint8_t vtattr_cap;
+
+/* The screen being written (curtty) and the one shown and typed into
+   (inputtty), 0-3; the vt state of the others is kept here */
+static uint8_t curtty, inputtty;
+static struct vt_switch ttysave[MAX_VT];
 
 /* PAL colour clock / baud = SERPER + 1 */
 #define PAL_CLOCK	3546895UL
@@ -62,17 +77,53 @@ void kputchar(uint8_t c)
 
 ttyready_t tty_writeready(uint8_t minor)
 {
-	if (minor == 1)
+	if (minor <= MAX_VT)
 		return TTY_READY_NOW;
 	return (SERDATR & 0x2000) ? TTY_READY_NOW : TTY_READY_SOON;
 }
 
+/* Interrupts stay off while a screen prints: a key's echo (or a kernel
+   message) from an interrupt would otherwise switch screens under the
+   vt code. Drawing a character is short; scrolling copies nothing. */
 void tty_putc(uint8_t minor, unsigned char c)
 {
-	if (minor == 1)
-		vtoutput(&c, 1);
-	else
+	irqflags_t irq;
+
+	if (minor > MAX_VT) {
 		SERDAT = 0x100 | c;
+		return;
+	}
+	irq = di();
+	if (curtty != minor - 1) {
+		vt_save(&ttysave[curtty]);
+		curtty = minor - 1;
+		vt_load(&ttysave[curtty]);
+		set_active_vt(curtty);
+	}
+	vtoutput(&c, 1);
+	irqrestore(irq);
+}
+
+/* Every screen starts white on black at the top left */
+void vt_switch_init(void)
+{
+	uint8_t i;
+
+	for (i = 0; i < MAX_VT; i++) {
+		vt_save(&ttysave[i]);
+		ttysave[i].ink = 7;
+		ttysave[i].paper = 0;
+		ttysave[i].cursorx = 0;
+		ttysave[i].cursory = 0;
+	}
+}
+
+static void show_vt(uint8_t n)
+{
+	if (n == inputtty || n >= MAX_VT)
+		return;
+	inputtty = n;
+	set_visible_vt(n);
 }
 
 void tty_setup(uint8_t minor, uint8_t flags)
@@ -80,7 +131,7 @@ void tty_setup(uint8_t minor, uint8_t flags)
 	struct termios *t;
 	uint8_t baud;
 
-	if (minor != 2)
+	if (minor != SERIAL_TTY)
 		return;
 	t = &ttydata[minor].termios;
 	baud = t->c_cflag & CBAUD;
@@ -110,7 +161,7 @@ void serial_interrupt(void)
 	while (INTREQR & INTF_RBF) {
 		uint8_t c = SERDATR & 0xFF;
 		INTREQ = INTF_RBF;
-		tty_inproc(2, c);
+		tty_inproc(SERIAL_TTY, c);
 	}
 }
 
@@ -149,8 +200,10 @@ static const uint8_t specialmap[0x20] = {
 #define KEY_CTRL	0x63
 #define KEY_LALT	0x64
 #define KEY_RALT	0x65
+#define KEY_LAMIGA	0x66
+#define KEY_RAMIGA	0x67
 
-static uint8_t shift, ctrl, caps, alt;
+static uint8_t shift, ctrl, caps, alt, amiga;
 
 /*
  *	A loaded AmigaOS keymap, converted by mkkeymap.py (format there):
@@ -242,9 +295,19 @@ void kbd_interrupt(void)
 	case KEY_RALT:
 		alt = !up;
 		return;
+	case KEY_LAMIGA:
+	case KEY_RAMIGA:
+		amiga = !up;
+		return;
 	}
 	if (up || code >= 0x60)
 		return;
+
+	/* Amiga+F1..F4 (or Alt+F1..F4, as on Linux): another screen */
+	if ((amiga || alt) && code >= 0x50 && code < 0x50 + MAX_VT) {
+		show_vt(code - 0x50);
+		return;
+	}
 
 	/* The keymap first; cursor, function and Help keys (strings in
 	   AmigaOS keymaps) from the table above */
@@ -255,7 +318,7 @@ void kbd_interrupt(void)
 				c &= 0x1F;
 			/* straight in: vt_inproc would turn 0xA0-0xFF (Latin-1
 			   letters) into escape sequences */
-			tty_inproc(1, c);
+			tty_inproc(inputtty + 1, c);
 			return;
 		}
 		if (dead)
@@ -271,7 +334,7 @@ void kbd_interrupt(void)
 		return;
 	if (ctrl && c >= 0x40 && c < 0x80)
 		c &= 0x1F;
-	vt_inproc(1, c);
+	vt_inproc(inputtty + 1, c);
 }
 
 /* KBSETTRANS: a keymap from mkkeymap.py, or "AKM0" for the built-in US */
@@ -307,7 +370,7 @@ static const struct fontinfo fontinfo = {
 
 int amiga_vt_ioctl(uint_fast8_t minor, uarg_t request, char *data)
 {
-	if (minor == 1) {
+	if (minor <= MAX_VT) {
 		switch (request) {
 		case VTFONTINFO:
 			return uput(&fontinfo, data, sizeof(fontinfo));

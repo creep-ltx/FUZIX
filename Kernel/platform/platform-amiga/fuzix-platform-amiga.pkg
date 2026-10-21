@@ -1,0 +1,7 @@
+# The Amiga's own files, put over the shared ones (this file is read
+# after Standalone's, so basefs has already placed them)
+package  platform-amiga
+disable-pkg platform-amiga
+
+r /etc/inittab
+f 0644 /etc/inittab inittab
