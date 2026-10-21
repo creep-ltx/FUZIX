@@ -61,6 +61,7 @@ SRCS  = \
 	factor.c \
 	fdisk.c \
 	fgrep.c \
+	fontprefs.c \
 	free.c \
 	fsck.c \
 	fsck-fuzix.c \

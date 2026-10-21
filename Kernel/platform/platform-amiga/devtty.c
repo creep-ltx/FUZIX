@@ -217,3 +217,43 @@ void kbd_interrupt(void)
 		c &= 0x1F;
 	vt_inproc(1, c);
 }
+
+/*
+ *	Console fonts: the screen draws from vtfont (Fuzix's own font at
+ *	boot). VTSETFONT replaces it, VTGETSTDFONT hands out Fuzix's font
+ *	or the Kickstart ROM's Topaz 8 so a program can offer both.
+ */
+extern uint8_t vtfont[2048];
+extern uint8_t romfont[2048];
+extern uint8_t have_romfont;
+extern const unsigned char fontdata_8x8[];
+
+static const struct fontinfo fontinfo = {
+	0, 255, 0, 0, FONT_INFO_8X8
+};
+
+int amiga_vt_ioctl(uint_fast8_t minor, uarg_t request, char *data)
+{
+	if (minor == 1) {
+		switch (request) {
+		case VTFONTINFO:
+			return uput(&fontinfo, data, sizeof(fontinfo));
+		case VTSETFONT:
+			return uget(data, vtfont, sizeof(vtfont));
+		case VTGETFONT:
+			return uput(vtfont, data, sizeof(vtfont));
+		case VTGETSTDFONT:
+			switch (ugetc(data)) {
+			case VTSTDFONT_FUZIX:
+				return uput(fontdata_8x8, data, 2048);
+			case VTSTDFONT_ROM:
+				if (have_romfont)
+					return uput(romfont, data, 2048);
+				break;
+			}
+			udata.u_error = ENOENT;
+			return -1;
+		}
+	}
+	return vt_ioctl(minor, request, data);
+}

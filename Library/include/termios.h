@@ -164,6 +164,12 @@ struct termios {
 #define VTBORDER	0x35
 #define VTINK		0x36
 #define VTPAPER		0x37
+/* Copy one of the machine's standard 8x8 fonts (256 characters, 2048
+   bytes). The buffer's first byte chooses: 0 = Fuzix's own font, 1 = the
+   font in the machine's ROM. ENOENT if there is no such font. */
+#define VTGETSTDFONT	0x38
+#define VTSTDFONT_FUZIX	0
+#define VTSTDFONT_ROM	1
 
 struct winsize {
     unsigned short ws_row;

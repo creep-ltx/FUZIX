@@ -1,4 +1,5 @@
 umask 022
+fontprefs -l 2>/dev/null
 fsck -a /
 setdate
 remount -n / rw

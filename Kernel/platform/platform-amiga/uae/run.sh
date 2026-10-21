@@ -6,6 +6,7 @@
 #   KICKSTART=<A1200 3.1 ROM>   required: Kickstart 3.1 r40.068 for the A1200
 #   SHOTS="10 20"               seconds after start to take screenshots
 #   UAE_EXTRA="fast_memory = 8192"   extra config lines (\n separated)
+#   KEEP_DISK=1                 keep the hard disk the last run left
 #   KEYS=<file>                 typed on the Amiga keyboard (uae/vkey):
 #                               lines "sleep N", "type TEXT", "key NAME",
 #                               "ctrl X"
@@ -24,8 +25,9 @@ OUT="${OUT:-$IMG/run}"
 mkdir -p "$OUT"
 rm -f "$OUT"/*.png "$OUT"/serial.log
 
-# The hard disk is written to: run from a copy
-cp "$IMG/disk.img" "$OUT/disk.img"
+# The hard disk is written to: run from a copy (KEEP_DISK=1 reuses the
+# last run's copy, to see what a previous run changed)
+[ -n "${KEEP_DISK:-}" ] && [ -f "$OUT/disk.img" ] || cp "$IMG/disk.img" "$OUT/disk.img"
 
 TTY="$OUT/serial-pty"
 cat > "$OUT/run.fs-uae" <<EOF

@@ -61,6 +61,7 @@ package  util
 
 f 0755 /bin/banner      banner
 f 0755 /bin/border	border
+f 0755 /bin/fontprefs	fontprefs
 l /bin/border /bin/ink
 l /bin/border /bin/paper
 f 0755 /bin/bd          bd
