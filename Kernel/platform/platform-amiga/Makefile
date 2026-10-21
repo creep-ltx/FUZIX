@@ -1,0 +1,62 @@
+
+CSRCS = devtty.c video.c
+CSRCS += devices.c main.c libc.c
+
+ASRCS = p68000.S crt0.S
+ASRCS += tricks.S
+
+DSRCS = ../../dev/devide.c ../../dev/mbr.c ../../dev/blkdev.c ../../dev/devide_discard.c
+DOBJS = $(patsubst ../../dev/%.c,%.o, $(DSRCS))
+
+LSRCS = ../../lib/68000exception.c ../../lib/68000usercopy.c ../../lib/68000relocate.c
+LOBJS = $(patsubst ../../lib/%.c,%.o, $(LSRCS))
+
+COBJS = $(CSRCS:.c=$(BINEXT))
+AOBJS = $(ASRCS:.S=.o)
+OBJS  = $(COBJS) $(AOBJS) $(DOBJS) $(LOBJS)
+
+CROSS_CCOPTS += -I../../dev/
+
+all:	$(OBJS)
+
+$(COBJS): %.o: %.c
+	$(CROSS_CC) $(CROSS_CCOPTS) -c $<
+
+$(AOBJS): %.o: %.S
+	$(CROSS_AS) $(ASOPTS) $< -o $*.o
+
+$(DOBJS): %.o: ../../dev/%.c
+	$(CROSS_CC) $(CROSS_CCOPTS) -c $<
+
+$(LOBJS): %.o: ../../lib/%.c
+	$(CROSS_CC) $(CROSS_CCOPTS) -c $<
+
+tricks.S: ../../lib/68000flat.S
+
+clean:
+	rm -f *.o fuzix.elf bootblock.elf bootblock.bin core *~
+
+IMAGES = $(FUZIX_ROOT)/Images/$(TARGET)
+
+image:
+	$(CROSS_LD) -M -o fuzix.elf -T fuzix.ld \
+	p68000.o ../../start.o ../../version.o ../../cpu-68000/lowlevel-68000.o \
+	tricks.o main.o ../../timer.o ../../kdata.o 68000exception.o devices.o \
+	../../devio.o ../../filesys.o ../../process.o ../../inode.o ../../syscall_fs.o \
+	../../syscall_proc.o ../../syscall_other.o ../../mm.o ../../flat.o \
+	../../blk512.o ../../tty.o ../../devsys.o ../../usermem.o ../../syscall_fs2.o \
+	../../syscall_fs3.o ../../syscall_exec32.o ../../syscall_exec.o \
+	blkdev.o devide.o devide_discard.o mbr.o 68000relocate.o \
+	68000usercopy.o ../../cpu-68000/usermem_std-68000.o devtty.o video.o libc.o \
+	../../malloc.o ../../vt.o ../../font8x8.o \
+	../../level2.o ../../syscall_level2.o ../../select.o > ../../fuzix.map
+	$(CROSS_COMPILE)objcopy fuzix.elf -O binary ../../fuzix.bin
+	$(CROSS_CC) -m68030 -c bootblock.S -o bootblock.o
+	$(CROSS_LD) -Ttext=0 --oformat=binary -o bootblock.bin bootblock.o
+	mkdir -p $(IMAGES)
+	python3 mkadf.py bootblock.bin ../../fuzix.bin $(IMAGES)/fuzix.adf
+
+diskimage:
+	# A 40MB disk: MBR partition table, the file system from block 2048
+	dd if=$(FUZIX_ROOT)/Standalone/filesystem-src/parttab.40M of=$(IMAGES)/disk.img bs=40017920 conv=sync
+	dd if=$(IMAGES)/filesys.img of=$(IMAGES)/disk.img bs=512 seek=2048 conv=notrunc

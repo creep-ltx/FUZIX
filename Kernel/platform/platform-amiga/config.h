@@ -1,0 +1,66 @@
+/*
+ *	Commodore Amiga (68000-68030, OCS/ECS/AGA), flat memory, no MMU.
+ *	First target: a stock A1200 (68EC020, 2MB chip RAM, Gayle IDE).
+ */
+
+/* Enable to make ^Z dump the inode table for debug */
+#undef CONFIG_IDUMP
+/* Enable to make ^A drop back into the monitor */
+#undef CONFIG_MONITOR
+/* Profil syscall support (not yet complete) */
+#undef CONFIG_PROFIL
+
+#define CONFIG_32BIT
+#define CONFIG_LEVEL_2
+
+#define CONFIG_MULTI
+#define CONFIG_FLAT
+#define CONFIG_SPLIT_ID
+#define CONFIG_PARENT_FIRST
+/* It's not that meaningful but we currently chunk to 512 bytes */
+#define CONFIG_BANKS 	(65536/512)
+
+#define CONFIG_LARGE_IO_DIRECT(x)	1
+
+#define CONFIG_SPLIT_UDATA
+#define UDATA_SIZE	1024
+#define UDATA_BLKS	2
+
+/* Vertical blank: 50Hz on PAL, 60Hz on NTSC (we assume PAL) */
+#define TICKSPERSEC 50
+
+/* Video terminal on tty1, Paula serial on tty2 */
+#define CONFIG_VT
+#define CONFIG_FONT8X8
+#define VT_WIDTH	80
+#define VT_HEIGHT	32
+#define VT_RIGHT	79
+#define VT_BOTTOM	31
+
+#define BOOT_TTY (512 + 1)	/* tty1: the screen */
+
+#define CMDLINE	NULL
+/* Root file system on the first partition of the IDE disk */
+#define BOOTDEVICE	0x0001
+
+/* Device parameters */
+#define NUM_DEV_TTY 2
+#define TTYDEV   BOOT_TTY /* Device used by kernel for messages, panics */
+
+#define NBUFS    16       /* Number of block buffers */
+#define NMOUNTS	 8	  /* Number of mounts at a time */
+
+#define MAX_BLKDEV 2
+
+#define CONFIG_IDE
+
+#define plt_copyright()
+
+#define PTABSIZE	64
+#define UFTSIZE		16
+#define OFTSIZE		160
+#define ITABSIZE	176
+
+#define BOOTDEVICENAMES "hd#"
+
+#define TTY_INIT_BAUD	B9600

@@ -1,0 +1,37 @@
+Fuzix for the Commodore Amiga
+=============================
+
+First target: a stock A1200 (68EC020, 2MB chip RAM, AGA, Gayle IDE,
+Kickstart 3.1). Fast RAM is used when exec reports it. Tested in FS-UAE
+only so far.
+
+Booting
+-------
+The kernel boots from a floppy (Images/amiga/fuzix.adf). The bootblock
+(bootblock.S) reads the kernel through trackdisk, notes chip and fast RAM
+from exec's memory list, stops the drive motor, shuts the OS down,
+copies the kernel to $400 and jumps to it. The root file system is the
+first partition of the IDE disk (Images/amiga/disk.img, MBR partitions,
+no byte swapping).
+
+  make TARGET=amiga YACC=yacc diskimage     (with m68k-elf-gcc on PATH)
+
+then uae/run.sh boots both in FS-UAE as a stock A1200, headless in cage.
+uae/vkey types on the emulated keyboard with real key codes.
+
+What works
+----------
+- Screen: 640x256 PAL hires, one bitplane, 80x32 text (tty1)
+- Keyboard: CIA-A serial, US layout, cursor keys, Ctrl, Shift, Caps
+- Serial: Paula on tty2, kernel messages mirrored there at 9600 baud
+- Timer: vertical blank, 50Hz
+- IDE: Gayle (A1200/A600) through the generic devide driver, PIO
+- Boots to login and a shell in FS-UAE, with and without fast RAM
+
+To do
+-----
+- Real A1200 test
+- Other keymaps (Swedish), Latin-1 font (the ROM's Topaz 8, as zenix had)
+- Floppy driver, A500/A2000 (68000, no IDE), A4000 IDE base
+- Mouse, sound, the clock port RTC
+- NTSC (60Hz tick)

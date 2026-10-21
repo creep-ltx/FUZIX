@@ -5,6 +5,7 @@
 #
 # 2063:		John Winans Z80 Retro system
 # 68knano:	A small retrobrew 68000 platform with IDE disk
+# amiga:		Commodore Amiga (stock A1200 first): floppy boot, Gayle IDE
 # amprolb:	The legendary Ampro Littleboard
 # coco2cart:	Tandy COCO2 or Dragon with 64K and IDE or SDC + cartridge flash
 #		(or xroar emulator )

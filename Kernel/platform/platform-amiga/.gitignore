@@ -1,0 +1,6 @@
+*.o
+*.elf
+*.bin
+uae/vkey/vkey
+uae/vkey/vk.c
+uae/vkey/vk.h
