@@ -53,14 +53,27 @@ image:
 	$(CROSS_COMPILE)objcopy fuzix.elf -O binary ../../fuzix.bin
 	$(CROSS_CC) -m68030 -c bootblock.S -o bootblock.o
 	$(CROSS_LD) -Ttext=0 --oformat=binary -o bootblock.bin bootblock.o
+	$(CROSS_CC) -m68030 -c hdboot.S -o hdboot.o
+	$(CROSS_LD) -Ttext=0 --oformat=binary -o hdboot.bin hdboot.o
 	mkdir -p $(IMAGES)
 	python3 mkadf.py bootblock.bin ../../fuzix.bin $(IMAGES)/fuzix.adf
+	python3 mkhunk.py hdboot.bin ../../fuzix.bin $(IMAGES)/fuzix.hunk
 
 diskimage:
 	# A 40MB disk: MBR partition table, the file system from block 2048
 	dd if=$(FUZIX_ROOT)/Standalone/filesystem-src/parttab.40M of=$(IMAGES)/disk.img bs=40017920 conv=sync
 	dd if=$(IMAGES)/filesys.img of=$(IMAGES)/disk.img bs=512 seek=2048 conv=notrunc
+	# Bootable by Kickstart: an RDB with the loader and kernel in it
+	python3 mkrdb.py $(IMAGES)/disk.img $(IMAGES)/fuzix.hunk
 	# The whole system on one floppy: 1560 blocks after the kernel
 	cd $(FUZIX_ROOT)/Standalone/filesystem-src && ./build-filesystem-ng -X -y \
 		-f $(IMAGES)/floppyfs.img -g 64 1560 -p amiga-floppy >/dev/null
+	cp $(FUZIX_ROOT)/Standalone/filesystem-src/ucp-tmp.txt $(IMAGES)/floppy-ucp.txt
 	python3 mkadf.py bootblock.bin ../../fuzix.bin $(IMAGES)/fuzix-floppy.adf $(IMAGES)/floppyfs.img
+	# The Extras disks: the rest of the full system, as tar archives
+	cd $(FUZIX_ROOT)/Standalone/filesystem-src && ./build-filesystem-ng -X -y \
+		-f $(IMAGES)/fullfs.tmp -g 256 65535 -p platform-amiga >/dev/null
+	cp $(FUZIX_ROOT)/Standalone/filesystem-src/ucp-tmp.txt $(IMAGES)/full-ucp.txt
+	rm -f $(IMAGES)/fullfs.tmp $(IMAGES)/fuzix-extras*.adf
+	python3 mkextras.py $(IMAGES)/full-ucp.txt $(IMAGES)/floppy-ucp.txt \
+		$(FUZIX_ROOT)/Standalone/filesystem-src $(IMAGES)

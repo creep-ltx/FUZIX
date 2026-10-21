@@ -124,8 +124,9 @@ int main(int argc, char *argv[])
 		if (umount(dev) == 0) {
 			queue_rm_mtab(dev);
 			rewrite_mtab();
-		} else
-			perror("umount");
+			return 0;
+		}
+		perror("umount");
 		return 1;
 	}
 	return err;

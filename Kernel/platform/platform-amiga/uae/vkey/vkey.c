@@ -162,6 +162,10 @@ int main(int argc, char **argv)
 	}
 	kbd = zwp_virtual_keyboard_manager_v1_create_virtual_keyboard(mgr, seat);
 	upload_keymap();
+	/* A brand new keyboard can lose its first key while the compositor
+	   and the client switch to its keymap: settle first */
+	wl_display_roundtrip(dpy);
+	sleep_ms(150);
 
 	for (i = 1; i < argc; i++) {
 		const char *a = argv[i];

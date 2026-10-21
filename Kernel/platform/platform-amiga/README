@@ -5,20 +5,40 @@ First target: a stock A1200 (68EC020, 2MB chip RAM, AGA, Gayle IDE,
 Kickstart 3.1). Fast RAM is used when exec reports it. Tested in FS-UAE
 only so far.
 
+Installing on a real Amiga
+--------------------------
+  fuzix-floppy.adf     the install disk; also a whole Fuzix on one floppy
+  fuzix-extras1-3.adf  the Extras disks: the rest of the commands, games,
+                       manual pages (tar archives straight on the disk)
+
+1. Boot the install disk. If there is a hard disk, Fuzix asks whether to
+   install on it (or later: log in as root, type setup). It erases the
+   whole hard disk (asks you to type ERASE), partitions it, makes the
+   file system, copies itself, and restarts.
+2. Take the floppy out: the Amiga boots Fuzix from the hard disk on its
+   own. Kickstart finds an Amiga partition table (RDB) with a bootable
+   FUZIX partition and loads the Fuzix loader stored in it as that
+   partition's "file system" (hdboot.S, mkrdb.py / setup).
+3. The first boot from the hard disk offers the Extras disks (or later:
+   setup extras). Put each in and press Return.
+
 Booting
 -------
-Two floppies are built:
+Images built by "make diskimage":
 
   fuzix.adf          boot floppy; the root file system is on the IDE disk
   fuzix-floppy.adf   the whole system on one floppy (no hard disk needed):
                      bootblock with an MBR partition table, the kernel,
                      and a 780K Fuzix file system from sector 200 with the
-                     small tool set (Standalone/filesystem-src/
+                     small tool set and setup (Standalone/filesystem-src/
                      fuzix-amigafloppy.pkg)
+  fuzix-extras*.adf  the Extras disks (mkextras.py)
+  fuzix.hunk         the hard disk loader with the kernel inside
+  disk.img           a 40MB test disk, bootable on its own (mkrdb.py)
 
-If the boot floppy has a Fuzix partition it is the root (hda1); otherwise
-the root is the first IDE disk's first partition (hdb1 while a disk is in
-the drive, hda1 if not).
+The floppy drive is always hda (with or without a disk in it) and the
+IDE disk hdb. If the boot floppy has a Fuzix partition it is the root
+(hda1); otherwise the root is hdb1.
 
 The kernel boots from a floppy. The bootblock
 (bootblock.S) reads the kernel through trackdisk, notes chip and fast RAM
@@ -29,8 +49,10 @@ no byte swapping).
 
   make TARGET=amiga YACC=yacc diskimage     (with m68k-elf-gcc on PATH)
 
-then uae/run.sh boots both in FS-UAE as a stock A1200, headless in cage.
-uae/vkey types on the emulated keyboard with real key codes.
+then uae/run.sh boots them in FS-UAE as a stock A1200, headless in cage.
+uae/vkey types on the emulated keyboard with real key codes; key scripts
+can "wait" for text on the screen (OCR). uae/tests/install.sh runs the
+whole install unattended: empty disk, install floppy, Extras disks.
 
 What works
 ----------

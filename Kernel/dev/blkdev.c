@@ -186,6 +186,18 @@ int blkdev_ioctl(uint_fast8_t minor, uarg_t request, char *data)
         }
 #endif
 
+	case BLKRRPART:
+	{
+		/* After a program rewrote the partition table: forget the old
+		   partitions and read them again. The caller must have closed
+		   and synced the partitions first. */
+		blkdev_t *blk = blk_op.blkdev;
+		memset(blk->lba_first, 0, sizeof(blk->lba_first));
+		memset(blk->lba_count, 0, sizeof(blk->lba_count));
+		blkdev_scan(blk, 0);
+		return 0;
+	}
+
 	case BLKGETSIZE:
 	{
 		uint_fast8_t partition = minor & 0x0F;

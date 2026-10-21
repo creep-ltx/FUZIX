@@ -77,6 +77,7 @@ struct sockaddr_in;
 #define HDIO_GET_IDENTITY	0x0102	/* Not yet implemented anywhere */
 #define HDIO_TRIM 		0x0106
 #define BLKGETSIZE		0x0107
+#define BLKRRPART	0x4108	/* re-read the partition table (Linux name) */
 
 /* uadmin */
 

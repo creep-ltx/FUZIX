@@ -1,0 +1,12 @@
+# Amiga-only programs (68000 builds only)
+include $(FUZIX_ROOT)/Target/rules.68000
+
+APPS = setup
+
+all: $(APPS)
+
+$(APPS): %: %.o
+	$(LINKER) $(CRT0) $^ -o $@ $(LINKER_OPT) $(LINKER_TAIL)
+
+clean:
+	rm -f *.o $(APPS)

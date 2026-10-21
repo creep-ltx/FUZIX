@@ -8,3 +8,5 @@ prtroot >/etc/mtab
 #fsck -a
 #mount -a
 >/var/run/utmp
+# Amiga: offer to install on the hard disk, or the Extras disks
+setup -boot 2>/dev/null

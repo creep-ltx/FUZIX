@@ -38,9 +38,30 @@ void memzero(void *p, usize_t len)
 	memset(p, 0, len);
 }
 
+/*
+ *	Gayle (A1200/A600) raises level 2 for the IDE drive. Kickstart's disk
+ *	driver leaves it on, and when Kickstart has just booted from the hard
+ *	disk an IDE interrupt can still be pending: level 2 then fires
+ *	continuously (only CIA-A is acknowledged there) and everything until
+ *	the IDE driver's reset crawls - the floppy probe took minutes. We
+ *	poll the drive, so: interrupts off at the drive (nIEN), Gayle's IDE
+ *	interrupt off, the drive's and Gayle's pending ones cleared. On the
+ *	A1200 Gayle's latch clears by writing (0x7C keeps the other bits);
+ *	the same fix zenix-old found ("fork takes 2.8 seconds").
+ */
+static void gayle_quiet(void)
+{
+	*(volatile uint8_t *)0xDA101A = 0x02;	/* IDE control: nIEN */
+	*(volatile uint8_t *)0xDAA000 = 0x00;	/* Gayle interrupt enables */
+	(void)*(volatile uint8_t *)0xDA001E;	/* IDE status: ack the drive */
+	*(volatile uint8_t *)0xDA9000 = 0x7C;	/* Gayle interrupt latch */
+	INTREQ = 0x0008;
+}
+
 /* Everything but the hardware vectors */
 void amiga_hw_init(void)
 {
+	gayle_quiet();
 	serial_init();
 	video_init();
 	kbd_init();

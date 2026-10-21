@@ -9,12 +9,16 @@
 #   ADF=fuzix-floppy.adf        boot floppy in Images/amiga (default
 #                               fuzix.adf; fuzix-floppy.adf = everything
 #                               on the floppy)
+#   ADF=none                    no floppy (boot from the hard disk)
 #   HD=none                     no hard disk
+#   HD=blank                    an empty 40MB hard disk
 #   FLOPPY_SPEED=100            real floppy speed (default 0 = turbo)
 #   KEEP_DISK=1                 keep the disks the last run left
 #   KEYS=<file>                 typed on the Amiga keyboard (uae/vkey):
 #                               lines "sleep N", "type TEXT", "key NAME",
-#                               "ctrl X"
+#                               "ctrl X", "wait TEXT" (until TEXT is on
+#                               screen, by OCR; up to 400 s), "shot NAME"
+#                               (OUT/NAME.png), "quit" (end the run)
 #
 # The keyscript (serial port) lines are "sleep N" and "send TEXT"
 # (see serial-tap.py).
@@ -28,13 +32,24 @@ if [ -z "${KICKSTART:-}" ]; then echo "set KICKSTART to an A1200 Kickstart 3.1 R
 SHOTS="${SHOTS:-}"
 OUT="${OUT:-$IMG/run}"
 mkdir -p "$OUT"
-rm -f "$OUT"/*.png "$OUT"/serial.log
+rm -f "$OUT"/*.png "$OUT"/serial.log "$OUT"/keys.log
 
 # The hard disk is written to: run from a copy (KEEP_DISK=1 reuses the
 # last run's copy, to see what a previous run changed)
 ADF="${ADF:-fuzix.adf}"
-[ -n "${KEEP_DISK:-}" ] && [ -f "$OUT/disk.img" ] || cp "$IMG/disk.img" "$OUT/disk.img"
-[ -n "${KEEP_DISK:-}" ] && [ -f "$OUT/$ADF" ] || cp "$IMG/$ADF" "$OUT/$ADF"
+if [ "${HD:-}" = blank ]; then
+	# An empty 40MB disk, to install onto
+	[ -n "${KEEP_DISK:-}" ] && [ -f "$OUT/disk.img" ] ||
+		dd if=/dev/zero of="$OUT/disk.img" bs=1M count=40 status=none
+else
+	[ -n "${KEEP_DISK:-}" ] && [ -f "$OUT/disk.img" ] || cp "$IMG/disk.img" "$OUT/disk.img"
+fi
+if [ "$ADF" = none ]; then
+	FDCONF=""
+else
+	[ -n "${KEEP_DISK:-}" ] && [ -f "$OUT/$ADF" ] || cp "$IMG/$ADF" "$OUT/$ADF"
+	FDCONF="floppy_drive_0 = $OUT/$ADF"
+fi
 if [ "${HD:-}" = none ]; then
 	HDCONF=""
 else
@@ -48,7 +63,7 @@ cat > "$OUT/run.fs-uae" <<EOF
 [fs-uae]
 amiga_model = A1200
 kickstart_file = $KICKSTART
-floppy_drive_0 = $OUT/$ADF
+$FDCONF
 floppy_drive_speed = ${FLOPPY_SPEED:-0}
 writable_floppy_images = 1
 $HDCONF
@@ -88,8 +103,13 @@ if [ -n "${KEYS:-}" ] && [ -n "$DISP" ]; then
 		type) WAYLAND_DISPLAY=$DISP "$HERE/vkey/vkey" "$arg" ;;
 		key) WAYLAND_DISPLAY=$DISP "$HERE/vkey/vkey" -k "$arg" ;;
 		ctrl) WAYLAND_DISPLAY=$DISP "$HERE/vkey/vkey" -c "$arg" ;;
+		wait) python3 "$HERE/waittext.py" "$DISP" 400 "$arg" ||
+			echo "wait timed out: $arg" >> "$OUT/keys.log" ;;
+		shot) WAYLAND_DISPLAY=$DISP grim "$OUT/$arg.png" ;;
+		quit) pkill -TERM -P "$EMU"; kill "$EMU" ;;
 		esac
 	done < "$KEYS") >/dev/null 2>&1 &
+	KEYLOOP=$!
 fi
 
 t=0
@@ -100,6 +120,11 @@ done
 
 wait $EMU 2>/dev/null || true
 kill $TAP 2>/dev/null || true
+# The key loop must not outlive the run: it would type into the next one
+if [ -n "${KEYLOOP:-}" ]; then
+	pkill -P "$KEYLOOP" 2>/dev/null || true
+	kill "$KEYLOOP" 2>/dev/null || true
+fi
 echo "=== serial console (${SECS}s):"
 tr -d '\r' < "$OUT/serial.log"
 ls "$OUT"/*.png 2>/dev/null || true

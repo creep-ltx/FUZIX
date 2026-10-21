@@ -1,0 +1,13 @@
+wait Enter new date
+key Return
+wait Enter new time
+key Return
+wait login:
+type root
+key Return
+sleep 3
+type ls /etc/extras*; ls /usr/games | wc; ls /usr/bin | wc; df
+key Return
+sleep 6
+shot check
+quit

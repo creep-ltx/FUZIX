@@ -152,7 +152,9 @@ int main(int argc, char *argv[])
 	int i, n;
 
 	if (argc == 2 && strcmp(argv[1], "-l") == 0) {
-		con = open("/dev/tty1", O_RDWR);
+		/* O_NOCTTY: at boot we must not become the console's controlling
+		   process, or the login shell later gets none */
+		con = open("/dev/tty1", O_RDWR | O_NOCTTY);
 		if (con == -1)
 			return 1;
 		current(cur, sizeof(cur));

@@ -1,0 +1,22 @@
+wait Enter new date
+key Return
+wait Enter new time
+key Return
+wait Extras disks now
+type y
+key Return
+wait press Return
+key Return
+wait is in.
+shot extras
+sleep 1
+type q
+key Return
+wait login:
+type root
+key Return
+sleep 3
+type sync
+key Return
+sleep 2
+quit

@@ -177,6 +177,7 @@ static int disk_dma(uint16_t len)
 {
 	uint16_t t = 16000;
 
+	DSKLEN = 0x4000;		/* stop anything left running */
 	DSKPTH = (uint32_t)mfm >> 16;
 	DSKPTL = (uint32_t)mfm & 0xFFFF;
 	INTREQ = INTF_DSKBLK;
@@ -354,6 +355,20 @@ static int write_track(uint8_t track)
 	return 0;
 }
 
+/* The change line stays low while there is no disk, even after a step
+   (a step clears it once a disk is in). Step in and back out. */
+static uint8_t disk_in(void)
+{
+	if (recalibrate())
+		return 0;
+	CIAB_PRB &= ~PRB_DIR;
+	step();
+	CIAB_PRB |= PRB_DIR;
+	step();
+	wait_ms(18);
+	return (CIAA_PRA & PRA_CHNG) ? 1 : 0;
+}
+
 static uint_fast8_t fd_transfer(void)
 {
 	uint32_t lba = blk_op.lba;
@@ -368,6 +383,11 @@ static uint_fast8_t fd_transfer(void)
 	if (!(CIAA_PRA & PRA_CHNG)) {
 		cache_track = -1;
 		cur_cyl = -1;
+		if (!disk_in()) {
+			fd_done();
+			udata.u_error = ENXIO;
+			return 0;
+		}
 	}
 	r = read_track(track);
 	if (r == 0) {
@@ -387,13 +407,23 @@ static int fd_flush(void)
 	return 0;
 }
 
-/* Returns the block device, or NULL if there is no disk in DF0 */
+/*
+ *	Returns the block device, or NULL if there is no DF0. The drive is
+ *	registered with or without a disk in it, so a disk can be put in
+ *	later (the install disks, the Extras disks); its partitions are only
+ *	read when a disk is in at boot.
+ */
 blkdev_t *fd_init(void)
 {
 	blkdev_t *blk;
+	uint8_t in;
 
 	CIAB_DDRB = 0xFF;
 	CIAB_PRB = 0xFF;		/* nothing selected, motor off */
+	/* Kickstart's trackdisk may have left a transfer set up */
+	DSKLEN = 0x4000;
+	ADKCON = 0x7F00;
+	INTREQ = INTF_DSKBLK;
 	kputs("Floppy DF0: ");
 	fd_motor_on();
 	if (recalibrate()) {
@@ -401,18 +431,7 @@ blkdev_t *fd_init(void)
 		fd_motor_off();
 		return NULL;
 	}
-	/* A step clears the disk change latch; it stays low with no
-	   disk in. Step in and back out to track 0. */
-	CIAB_PRB &= ~PRB_DIR;
-	step();
-	CIAB_PRB |= PRB_DIR;
-	step();
-	wait_ms(18);
-	if (!(CIAA_PRA & PRA_CHNG)) {
-		kputs("no disk\n");
-		fd_motor_off();
-		return NULL;
-	}
+	in = disk_in();
 	blk = blkdev_alloc();
 	if (blk == NULL) {
 		fd_motor_off();
@@ -422,7 +441,10 @@ blkdev_t *fd_init(void)
 	blk->flush = fd_flush;
 	blk->driver_data = 0;
 	blk->drive_lba_count = TRACKS * SECTORS;
-	blkdev_scan(blk, SWAPSCAN);
+	if (in)
+		blkdev_scan(blk, SWAPSCAN);
+	else
+		kputs("hda: no disk\n");
 	fd_done();
 	return blk;
 }
