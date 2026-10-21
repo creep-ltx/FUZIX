@@ -1,12 +1,27 @@
 # Amiga-only programs (68000 builds only)
 include $(FUZIX_ROOT)/Target/rules.68000
 
-APPS = setup
+APPS = setup keymap
 
-all: $(APPS)
+all: $(APPS) keymaps
 
 $(APPS): %: %.o
 	$(LINKER) $(CRT0) $^ -o $@ $(LINKER_OPT) $(LINKER_TAIL)
 
+# The AmigaOS keymaps, converted. They are Commodore/Hyperion files, so
+# they are not in this tree: point AMIGA_KEYMAPS at a Devs/Keymaps folder
+# of your own Workbench. Without it only the built-in US keymap exists.
+MKKEYMAP = $(FUZIX_ROOT)/Kernel/platform/platform-amiga/mkkeymap.py
+.PHONY: keymaps
+keymaps:
+	rm -rf keymaps
+	if [ -n "$(AMIGA_KEYMAPS)" ]; then \
+		python3 $(MKKEYMAP) --pkg fuzix-amigakeymaps.pkg keymaps \
+			$$(ls "$(AMIGA_KEYMAPS)"/* | grep -v -e '\.info' -e '\.uaem'); \
+	else \
+		python3 $(MKKEYMAP) --pkg fuzix-amigakeymaps.pkg keymaps; \
+	fi
+
 clean:
 	rm -f *.o $(APPS)
+	rm -rf keymaps fuzix-amigakeymaps.pkg

@@ -1,5 +1,5 @@
 
-CSRCS = devtty.c video.c devfd.c
+CSRCS = devtty.c video.c devfd.c rtc.c
 CSRCS += devices.c main.c libc.c
 
 ASRCS = p68000.S crt0.S
@@ -47,7 +47,7 @@ image:
 	../../blk512.o ../../tty.o ../../devsys.o ../../usermem.o ../../syscall_fs2.o \
 	../../syscall_fs3.o ../../syscall_exec32.o ../../syscall_exec.o \
 	blkdev.o devide.o devide_discard.o mbr.o 68000relocate.o \
-	68000usercopy.o ../../cpu-68000/usermem_std-68000.o devtty.o video.o devfd.o libc.o \
+	68000usercopy.o ../../cpu-68000/usermem_std-68000.o devtty.o video.o devfd.o rtc.o libc.o \
 	../../malloc.o ../../vt.o ../../font8x8.o \
 	../../level2.o ../../syscall_level2.o ../../select.o > ../../fuzix.map
 	$(CROSS_COMPILE)objcopy fuzix.elf -O binary ../../fuzix.bin

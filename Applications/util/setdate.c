@@ -214,7 +214,6 @@ int rtcwrite(void)
     }
 
     lseek(fd, 0, SEEK_SET);
-    puts("writing\n");
     if (write(fd, &rtc, sizeof(rtc)) != sizeof(rtc)) {
         perror("write");
         close(fd);
@@ -334,5 +333,7 @@ retime:
         perror("stime");
         return 2;
     }
+    /* Keep it in the battery clock too, if there is one */
+    rtcwrite();
     return 0;
 }

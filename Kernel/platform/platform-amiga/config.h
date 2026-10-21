@@ -58,6 +58,12 @@ extern unsigned short amiga_root_dev;
 
 #define CONFIG_IDE
 
+/* Battery-backed clock at $DC0000 (MSM6242 or RP5C01), if there is one:
+   /dev/rtc, read by setdate at boot */
+#define CONFIG_RTC
+#define CONFIG_RTC_FULL
+#define CONFIG_RTC_INTERVAL	255
+
 #define plt_copyright()
 
 #define PTABSIZE	64

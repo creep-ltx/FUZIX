@@ -45,7 +45,10 @@ unsigned short amiga_root_dev = 0x0001;
  */
 void device_init(void)
 {
-  blkdev_t *fd = fd_init();
+  blkdev_t *fd;
+
+  rtc_init();
+  fd = fd_init();
 
   devide_init();
   if (fd && !fd->lba_count[0])

@@ -139,16 +139,53 @@ static const uint8_t shiftmap[0x40] = {
 static const uint8_t specialmap[0x20] = {
 	' ', KEY_BS, KEY_TAB, '\r', '\r', KEY_ESC, KEY_DEL, 0,
 	0, 0, '-', 0, KEY_UP, KEY_DOWN, KEY_RIGHT, KEY_LEFT,
-	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, '(', ')', '/', '*', '+', KEY_HELP
+	KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5, KEY_F6, KEY_F7, KEY_F8,
+	KEY_F9, KEY_F10, '(', ')', '/', '*', '+', KEY_HELP
 };
 
 #define KEY_LSHIFT	0x60
 #define KEY_RSHIFT	0x61
 #define KEY_CAPS	0x62
 #define KEY_CTRL	0x63
+#define KEY_LALT	0x64
+#define KEY_RALT	0x65
 
-static uint8_t shift, ctrl, caps;
+static uint8_t shift, ctrl, caps, alt;
+
+/*
+ *	A loaded AmigaOS keymap, converted by mkkeymap.py (format there):
+ *	every key's character for none, Shift, Alt and Shift+Alt, dead keys
+ *	(an accent, then the letter), and which keys Caps Lock affects.
+ *	Without one the US tables above are used.
+ */
+#define AKM_SIZE	4096
+#define AKM_KEYS	0x68
+#define AKM_ENTRIES	24
+static uint8_t akm[AKM_SIZE];
+static uint8_t have_akm;
+static uint8_t dead;			/* pending dead key, 0 = none */
+
+static uint8_t akm_key(uint8_t code)
+{
+	uint8_t s = shift;
+	uint8_t *e;
+	uint16_t mod;
+	uint8_t c;
+
+	if (caps && (akm[8 + (code >> 3)] & (1 << (code & 7))))
+		s = 1;
+	e = akm + AKM_ENTRIES + 16 * code + 4 * (s | (alt << 1));
+	if (e[1]) {			/* a dead key: wait for the next */
+		dead = e[1];
+		return 0;
+	}
+	c = e[0];
+	mod = (e[2] << 8) | e[3];
+	if (mod && dead <= akm[4] && mod + akm[4] < AKM_SIZE)
+		c = akm[mod + dead];
+	dead = 0;
+	return c;
+}
 
 /* Wait for two scanline changes: between 64 and 128us on any CPU */
 static void kbd_handshake_wait(void)
@@ -201,10 +238,29 @@ void kbd_interrupt(void)
 		/* The caps key reports its LED state: down = on */
 		caps = !up;
 		return;
+	case KEY_LALT:
+	case KEY_RALT:
+		alt = !up;
+		return;
 	}
 	if (up || code >= 0x60)
 		return;
 
+	/* The keymap first; cursor, function and Help keys (strings in
+	   AmigaOS keymaps) from the table above */
+	if (have_akm && code < AKM_KEYS) {
+		c = akm_key(code);
+		if (c) {
+			if (ctrl && c >= 0x40 && c < 0x80)
+				c &= 0x1F;
+			/* straight in: vt_inproc would turn 0xA0-0xFF (Latin-1
+			   letters) into escape sequences */
+			tty_inproc(1, c);
+			return;
+		}
+		if (dead)
+			return;
+	}
 	if (code < 0x40) {
 		c = shift ? shiftmap[code] : keymap[code];
 		if (caps && c >= 'a' && c <= 'z')
@@ -218,6 +274,23 @@ void kbd_interrupt(void)
 	vt_inproc(1, c);
 }
 
+/* KBSETTRANS: a keymap from mkkeymap.py, or "AKM0" for the built-in US */
+static int set_keymap(char *data)
+{
+	have_akm = 0;
+	dead = 0;
+	if (uget(data, akm, AKM_SIZE) == -1)
+		return -1;
+	if (memcmp(akm, "AKM0", 4) == 0)
+		return 0;
+	if (memcmp(akm, "AKM1", 4)) {
+		udata.u_error = EINVAL;
+		return -1;
+	}
+	have_akm = 1;
+	return 0;
+}
+
 /*
  *	Console fonts: the screen draws from vtfont (Fuzix's own font at
  *	boot). VTSETFONT replaces it, VTGETSTDFONT hands out Fuzix's font
@@ -226,7 +299,7 @@ void kbd_interrupt(void)
 extern uint8_t vtfont[2048];
 extern uint8_t romfont[2048];
 extern uint8_t have_romfont;
-extern const unsigned char fontdata_8x8[];
+extern uint8_t fuzixfont[2048];
 
 static const struct fontinfo fontinfo = {
 	0, 255, 0, 0, FONT_INFO_8X8
@@ -242,10 +315,12 @@ int amiga_vt_ioctl(uint_fast8_t minor, uarg_t request, char *data)
 			return uget(data, vtfont, sizeof(vtfont));
 		case VTGETFONT:
 			return uput(vtfont, data, sizeof(vtfont));
+		case KBSETTRANS:
+			return set_keymap(data);
 		case VTGETSTDFONT:
 			switch (ugetc(data)) {
 			case VTSTDFONT_FUZIX:
-				return uput(fontdata_8x8, data, 2048);
+				return uput(fuzixfont, data, 2048);
 			case VTSTDFONT_ROM:
 				if (have_romfont)
 					return uput(romfont, data, 2048);

@@ -3,7 +3,7 @@
 package  amiga-floppy
 
 disable-pkg ALL amiga-floppy
-enable-pkg basefs util-mini V7-cmd-micro V7-sh amiga-floppy-extra amiga-setup
+enable-pkg basefs util-mini V7-cmd-micro V7-sh amiga-floppy-extra amiga-setup amiga-keymaps
 
 package  amiga-floppy-extra
 # only as part of amiga-floppy (the full system has these from util)
@@ -37,5 +37,6 @@ package  amiga-setup
 if-file  ../../Applications/amiga/setup
 
 f 0755 /bin/setup	../../Applications/amiga/setup
+f 0755 /bin/keymap	../../Applications/amiga/keymap
 d 0755 /usr/lib/fuzix
 f 0644 /usr/lib/fuzix/fuzix.hunk	../../Images/amiga/fuzix.hunk
