@@ -1,0 +1,12 @@
+# FUZIX on an emulated A1200, booting from the hard disk image.
+# Put this file next to fuzix-amiga-0.1b1.hdf and open it in FS-UAE.
+# FS-UAE needs an A1200 Kickstart 3.1 ROM (set kickstart_file, or keep
+# it in FS-UAE's Kickstarts folder).
+[fs-uae]
+amiga_model = A1200
+# FUZIX drives the A1200's own IDE port: attach the image there
+hard_drive_0 = fuzix-amiga-0.1b1.hdf
+hard_drive_0_controller = ide0
+hard_drive_0_type = hdf
+# A battery clock, so FUZIX knows the date without asking
+uae_rtc = MSM6242B

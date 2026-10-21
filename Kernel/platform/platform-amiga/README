@@ -60,7 +60,10 @@ Images built by "make diskimage":
                      fuzix-amigafloppy.pkg)
   fuzix-extras*.adf  the Extras disks (mkextras.py)
   fuzix.hunk         the hard disk loader with the kernel inside
-  disk.img           a 40MB test disk, bootable on its own (mkrdb.py)
+  disk.img           a 40MB disk with everything installed, bootable on
+                     its own (mkrdb.py); released as the HDF for UAE
+                     together with release/fuzix-amiga.fs-uae and
+                     release/README.txt
 
 The floppy drive is always hda (with or without a disk in it) and the
 IDE disk hdb. If the boot floppy has a Fuzix partition it is the root
