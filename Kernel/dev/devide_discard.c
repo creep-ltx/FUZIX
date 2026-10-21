@@ -29,12 +29,16 @@
 
 #define IDE_HAS_RESET
 
+/* A platform with a slow tick can wait longer: at least 25ms */
+#ifndef IDE_RESET_MS
+#define IDE_RESET_MS 25
+#endif
+
 static void devide_delay(void)
 {
     timer_t timeout;
 
-    /* at least 25ms: with a slow tick, wait one tick more */
-    timeout = set_timer_ms(25 + 1000 / TICKSPERSEC);
+    timeout = set_timer_ms(IDE_RESET_MS);
 
     while(!timer_expired(timeout))
        plt_idle();
@@ -98,6 +102,7 @@ void devide_init_drive(uint_fast8_t drive)
     if (!devide_wait(IDE_STATUS_READY))
         goto out;
 
+#ifdef CONFIG_IDE_DRAIN
     /* A transfer the boot firmware left unfinished keeps DRQ up (seen
        on an emulated A1200 booted from the disk: the "identify data"
        was the last sector the boot ROM read). Read it away first. */
@@ -111,6 +116,7 @@ void devide_init_drive(uint_fast8_t drive)
             devide_read_data();
         tmpfree(buffer);
     }
+#endif
 
     /* allocate temporary sector buffer memory */
     buffer = (uint8_t *)tmpbuf();

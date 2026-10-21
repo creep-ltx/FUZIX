@@ -68,5 +68,6 @@ void plt_vblank(void);
 void amiga_hw_init(void);
 void rtc_init(void);
 int amiga_vt_ioctl(uint_fast8_t minor, uarg_t request, char *data);
+int amiga_blk_ioctl(uint_fast8_t minor, uarg_t request, char *data);
 
 #endif

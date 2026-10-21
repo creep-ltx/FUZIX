@@ -1,7 +1,9 @@
-# Amiga-only programs (68000 builds only)
+# The Amiga's own programs, built with the kernel image (make image)
+FUZIX_ROOT ?= $(abspath ../../../..)
+USERCPU = 68000
 include $(FUZIX_ROOT)/Target/rules.68000
 
-APPS = keymap
+APPS = keymap fontprefs
 
 all: $(APPS) setup amigaread keymaps
 
@@ -23,7 +25,7 @@ amigaread: amigaread.o adf.o
 # For your own use only: AMIGA_KEYMAPS=<a Devs/Keymaps folder of your own
 # Workbench> converts the AmigaOS originals instead. Those are Commodore/
 # Hyperion files: images built that way must not be given to others.
-PLAT = $(FUZIX_ROOT)/Kernel/platform/platform-amiga
+PLAT = ..
 .PHONY: keymaps
 keymaps:
 	rm -rf keymaps

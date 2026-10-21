@@ -40,6 +40,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
+#include "../amigaioctl.h"
 #include <syscalls.h>
 
 #define FLOPPY		"/dev/hda"

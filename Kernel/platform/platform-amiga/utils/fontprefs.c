@@ -18,6 +18,7 @@
 #include <dirent.h>
 #include <termios.h>
 #include <sys/ioctl.h>
+#include "../amigaioctl.h"
 
 #define FONTDIR		"/usr/lib/fonts"
 #define PREFS		"/etc/fontprefs"

@@ -12,6 +12,7 @@
 #include <vt.h>
 #include <tty.h>
 #include "amiga.h"
+#include "amigaioctl.h"
 
 static unsigned char tbuf1[TTYSIZ];
 static unsigned char tbuf2[TTYSIZ];

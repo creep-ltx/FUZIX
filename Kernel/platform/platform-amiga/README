@@ -9,7 +9,7 @@ Licence
 -------
 Everything here is under the GNU GPL version 2, like the rest of the
 Fuzix kernel (see LICENCE at the top of the tree); the Amiga programs in
-Applications/amiga likewise. Other people's work in it:
+utils/ likewise. Other people's work in it:
 
 - the keymaps on the disks are made at build time from the X keyboard
   layouts (xkeyboard-config, MIT/X11 licence): mkxkbkeymap.py, notice in
@@ -112,18 +112,34 @@ What works
   variant up to OS 3.2's long names (CFile's reader, adf.c)
 - Battery clock: MSM6242 or RP5C01 at $DC0000 (A500+/A600/A2000/A3000/
   A4000, clock-port and accelerator clocks) as /dev/rtc: no date and
-  time questions at boot; a time set with setdate is saved to it
+  time questions at boot; setdate -w saves the system time to it
 - Serial: Paula on tty5, kernel messages mirrored there at 9600 baud
 - Timer: vertical blank, 50Hz
 - IDE: Gayle (A1200/A600) through the generic devide driver, PIO; LBA
   or cylinder/head/sector drives (CONFIG_IDE_AUTO)
-- Partitions: Amiga partition tables (RDB, dev/rdb.c) and PC ones
+- Partitions: Amiga partition tables (RDB, rdb.c) and PC ones
 - Floppy: DF0, 880K AmigaDOS-format tracks read and written through
   Paula's disk DMA (devfd.c); a track cache, whole-track writes; the
   motor goes off two seconds after the last use
 - Fonts: Fuzix's own 8x8 font, or the Kickstart ROM's Topaz 8 (found in
   any ROM from 1.3 to 3.2); fontprefs picks one and /etc/rc loads it
 - Boots to login and a shell in FS-UAE, with and without fast RAM
+
+Outside this folder
+-------------------
+Everything Amiga-only is here: the drivers, rdb.c, the programs in
+utils/, /etc/inittab and /etc/rc (put over the shared ones by
+fuzix-platform-amiga.pkg), the floppy's package list. The shared tree
+has only:
+
+- Kernel/dev/devide*.[ch]: CONFIG_IDE_AUTO (LBA or CHS per drive),
+  CONFIG_IDE_DRAIN, IDE_REG_ALTSTATUS (the 400ns status wait) and
+  IDE_RESET_MS. Each is off unless a platform's config asks for it.
+- Library/libs/utime.c (and utime as _utime in the syscall list): utime
+  set every file to 1970 on big-endian machines. A fix for every port.
+- Applications/util/umount.c: exited 1 after a good unmount.
+- -std=gnu17 and -fpermissive in the 68000 rules: GCC 15 and later.
+- Makefile: the amiga line in the list of targets.
 
 To do
 -----

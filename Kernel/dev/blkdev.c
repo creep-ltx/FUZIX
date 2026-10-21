@@ -5,9 +5,6 @@
 #include <printf.h>
 #include <blkdev.h>
 #include <mbr.h>
-#ifdef CONFIG_RDB
-#include <rdb.h>
-#endif
 
 /*
    Minor numbers
@@ -189,18 +186,6 @@ int blkdev_ioctl(uint_fast8_t minor, uarg_t request, char *data)
         }
 #endif
 
-	case BLKRRPART:
-	{
-		/* After a program rewrote the partition table: forget the old
-		   partitions and read them again. The caller must have closed
-		   and synced the partitions first. */
-		blkdev_t *blk = blk_op.blkdev;
-		memset(blk->lba_first, 0, sizeof(blk->lba_first));
-		memset(blk->lba_count, 0, sizeof(blk->lba_count));
-		blkdev_scan(blk, 0);
-		return 0;
-	}
-
 	case BLKGETSIZE:
 	{
 		uint_fast8_t partition = minor & 0x0F;
@@ -237,10 +222,5 @@ void blkdev_scan(blkdev_t *blk, uint_fast8_t flags)
 
     blk_op.blkdev = blk;
     mbr_parse(letter);
-#ifdef CONFIG_RDB
-    /* No PC partitions: an Amiga partition table, maybe */
-    if (blk->lba_count[0] == 0)
-        rdb_parse(letter);
-#endif
     kputchar('\n');
 }

@@ -1,6 +1,4 @@
 umask 022
-fontprefs -l 2>/dev/null
-keymap -l 2>/dev/null
 fsck -a /
 setdate
 remount -n / rw
@@ -9,5 +7,3 @@ prtroot >/etc/mtab
 #fsck -a
 #mount -a
 >/var/run/utmp
-# Amiga: offer to install on the hard disk, or the Extras disks
-setup -boot 2>/dev/null

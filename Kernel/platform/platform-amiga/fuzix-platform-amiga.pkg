@@ -1,7 +1,63 @@
-# The Amiga's own files, put over the shared ones (this file is read
-# after Standalone's, so basefs has already placed them)
+# The Amiga's files. Everything Amiga-only lives in this folder: the
+# shared packages are as everywhere else.
+#
+# platform-amiga	the Amiga's own /etc files, put over the shared ones
+#			(read after Standalone's, so basefs has placed them)
+# amiga-setup		setup, keymap, fontprefs, amigaread, the loader
+# amiga-floppy		the all-on-one-floppy system (-p amiga-floppy)
 package  platform-amiga
 disable-pkg platform-amiga
 
 r /etc/inittab
 f 0644 /etc/inittab inittab
+r /etc/rc
+f 0755 /etc/rc rc
+f 0644 /etc/fsck.yes fsck.yes
+
+# The Amiga's all-on-one-floppy system: the mini set plus everyday tools,
+# within the 780K left on an 880K disk after the bootblock and kernel.
+package  amiga-floppy
+
+disable-pkg ALL amiga-floppy
+enable-pkg basefs util-mini V7-cmd-micro V7-sh amiga-floppy-extra amiga-setup amiga-keymaps platform-amiga
+
+package  amiga-floppy-extra
+# only as part of amiga-floppy (the full system has these from util)
+disable-pkg amiga-floppy-extra
+
+f 0755 /bin/more	../../../Applications/util/more
+f 0755 /bin/uname	../../../Applications/util/uname
+f 0755 /bin/free	../../../Applications/util/free
+f 0755 /bin/head	../../../Applications/util/head
+f 0755 /bin/tail	../../../Applications/util/tail
+f 0755 /bin/wc		../../../Applications/util/wc
+f 0755 /bin/grep	../../../Applications/util/grep
+f 0755 /bin/sleep	../../../Applications/util/sleep
+f 0755 /bin/which	../../../Applications/util/which
+f 0755 /bin/du		../../../Applications/util/du
+f 0755 /bin/sort	../../../Applications/util/sort
+f 0755 /bin/uniq	../../../Applications/util/uniq
+f 0755 /bin/env		../../../Applications/util/env
+f 0755 /bin/id		../../../Applications/util/id
+f 0755 /bin/who		../../../Applications/util/who
+f 0755 /bin/whoami	../../../Applications/util/whoami
+f 0755 /bin/passwd	../../../Applications/util/passwd
+f 0755 /bin/su		../../../Applications/util/su
+f 0755 /bin/tee		../../../Applications/util/tee
+f 0755 /bin/banner	../../../Applications/util/banner
+f 0755 /bin/tar		../../../Applications/util/tar
+
+# The Amiga's own programs, the hard disk loader and the kernel, in every
+# Amiga system
+package  amiga-setup
+if-file  utils/setup
+
+f 0755 /bin/setup	utils/setup
+f 0755 /bin/keymap	utils/keymap
+f 0755 /bin/fontprefs	utils/fontprefs
+d 0755 /usr/lib/fonts
+f 0755 /bin/amigaread	utils/amigaread
+l /bin/amigaread /bin/amigadir
+d 0755 /usr/lib/fuzix
+f 0644 /usr/lib/fuzix/hdboot.hunk	../../../Images/amiga/hdboot.hunk
+f 0644 /usr/lib/fuzix/kernel	../../fuzix.bin

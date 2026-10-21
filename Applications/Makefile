@@ -2,7 +2,7 @@
 APPS = util cmd sh games cave cpm v7games games cursesgames \
        as09 ld09 netd MWC flashrom ue cpmfs plato \
        emulators cpnet dw assembler CC cpp ar \
-       2048 amiga
+       2048
 
 .PHONY: $(APPS)
 
@@ -10,10 +10,6 @@ all:	$(APPS)
 
 util:
 	+(cd util; $(MAKE) -f Makefile.$(USERCPU))
-
-# Only built where there is a Makefile for the CPU (68000)
-amiga:
-	+(cd amiga; [ ! -f Makefile.$(USERCPU) ] || $(MAKE) -f Makefile.$(USERCPU))
 
 cmd:
 	+(cd V7/cmd; $(MAKE) -f Makefile.$(USERCPU))
@@ -89,7 +85,6 @@ ar:
 
 clean:
 	(cd util; $(MAKE) -f Makefile.$(USERCPU) clean)
-	(cd amiga; [ ! -f Makefile.$(USERCPU) ] || $(MAKE) -f Makefile.$(USERCPU) clean)
 	(cd V7/cmd; $(MAKE) -f Makefile.$(USERCPU) clean)
 	(cd V7/cmd/sh; $(MAKE) -f Makefile.$(USERCPU) clean)
 	(cd V7/games; $(MAKE) -f Makefile.$(USERCPU) clean)

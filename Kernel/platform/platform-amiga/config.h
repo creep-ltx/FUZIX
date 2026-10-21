@@ -62,9 +62,10 @@ extern unsigned short amiga_root_dev;
 #define CONFIG_IDE
 /* LBA, or cylinder/head/sector for drives without it */
 #define CONFIG_IDE_AUTO
-/* Amiga partition tables (RDB) as well as PC ones */
-#define CONFIG_RDB
-
+/* Read away a transfer the boot ROM left unfinished */
+#define CONFIG_IDE_DRAIN
+/* The 25ms reset wait, plus one tick: the tick is 20ms */
+#define IDE_RESET_MS	(25 + 1000 / TICKSPERSEC)
 /* Battery-backed clock at $DC0000 (MSM6242 or RP5C01), if there is one:
    /dev/rtc, read by setdate at boot */
 #define CONFIG_RTC

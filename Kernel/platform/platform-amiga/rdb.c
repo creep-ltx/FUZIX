@@ -12,15 +12,14 @@
  *	loader (hdboot). Every partition is the whole partition, for Fuzix
  *	and for tools such as amigaread on AmigaOS partitions.
  *
- *	Checked after the MBR: a disk with a PC partition table keeps it.
+ *	Checked after the MBR (devices.c): a disk with a PC partition table
+ *	keeps it.
  */
 #include <kernel.h>
 #include <kdata.h>
 #include <printf.h>
 #include <blkdev.h>
 #include "rdb.h"
-
-#ifdef CONFIG_RDB
 
 #define ID_RDSK		0x5244534BUL
 #define ID_PART		0x50415254UL
@@ -83,6 +82,7 @@ uint_fast8_t rdb_parse(uint_fast8_t letter)
 		return 0;
 	}
 	memset(rdb_dostype[drive], 0, sizeof(rdb_dostype[drive]));
+	kprintf("hd%c: ", letter);
 	next = g32(b + 28);			/* rdb_PartitionList */
 	while (next != NONE && part < MAX_PARTITIONS && steps++ < 64) {
 		if (!read_block(next, b) || !valid(b, ID_PART))
@@ -124,5 +124,3 @@ uint16_t rdb_fuzix_minor(uint_fast8_t drive)
 			return (drive << 4) | (i + 1);
 	return 0;
 }
-
-#endif

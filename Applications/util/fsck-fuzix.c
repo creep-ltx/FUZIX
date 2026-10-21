@@ -104,12 +104,6 @@ static uint16_t max_inode;
 static int yes_noerror(void)
 {
     static char buf[16];
-    /* -a (automatic, at boot): repair without asking, so a machine that
-       was switched off without a shutdown still comes up unattended */
-    if (aflag) {
-        puts("y");
-        return 1;
-    }
     fflush(stdout);
     do {
         if (fgets(buf, 15, stdin) == NULL)

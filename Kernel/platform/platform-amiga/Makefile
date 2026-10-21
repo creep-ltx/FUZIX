@@ -1,11 +1,11 @@
 
 CSRCS = devtty.c video.c devfd.c rtc.c
-CSRCS += devices.c main.c libc.c
+CSRCS += devices.c main.c libc.c rdb.c
 
 ASRCS = p68000.S crt0.S
 ASRCS += tricks.S
 
-DSRCS = ../../dev/devide.c ../../dev/mbr.c ../../dev/rdb.c ../../dev/blkdev.c ../../dev/devide_discard.c
+DSRCS = ../../dev/devide.c ../../dev/mbr.c ../../dev/blkdev.c ../../dev/devide_discard.c
 DOBJS = $(patsubst ../../dev/%.c,%.o, $(DSRCS))
 
 LSRCS = ../../lib/68000exception.c ../../lib/68000usercopy.c ../../lib/68000relocate.c
@@ -35,10 +35,12 @@ tricks.S: ../../lib/68000flat.S
 
 clean:
 	rm -f *.o fuzix.elf bootblock.elf bootblock.bin core *~
+	$(MAKE) -C utils clean
 
 IMAGES = $(FUZIX_ROOT)/Images/$(TARGET)
 
 image:
+	$(MAKE) -C utils
 	$(CROSS_LD) -M -o fuzix.elf -T fuzix.ld \
 	p68000.o ../../start.o ../../version.o ../../cpu-68000/lowlevel-68000.o \
 	tricks.o main.o ../../timer.o ../../kdata.o 68000exception.o devices.o \
