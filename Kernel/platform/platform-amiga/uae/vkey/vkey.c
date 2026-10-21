@@ -166,6 +166,10 @@ int main(int argc, char **argv)
 	   and the client switch to its keymap: settle first */
 	wl_display_roundtrip(dpy);
 	sleep_ms(150);
+	/* A warm-up key: the first one after a new keyboard can still be
+	   lost (Knowledge/demoscene/fs-uae-notes.md); Shift alone types
+	   nothing */
+	press(42, 0);
 
 	for (i = 1; i < argc; i++) {
 		const char *a = argv[i];

@@ -8,6 +8,7 @@
 #include <vt.h>
 #include "amiga.h"
 #include "devfd.h"
+#include <rdb.h>
 
 struct devsw dev_tab[] =  /* The device driver switch table */
 {
@@ -39,18 +40,26 @@ bool validdev(uint16_t dev)
 unsigned short amiga_root_dev = 0x0001;
 
 /*
- *	The floppy goes first so that when it carries the root file system
- *	it is hda. Otherwise the root is the first IDE disk: hda if there is
- *	no disk in the drive, hdb if there is.
+ *	The floppy goes first, so it is always hda and the IDE disk hdb.
+ *	The root file system: the boot floppy's Fuzix partition if it has
+ *	one; else the IDE disk's Fuzix partition in its Amiga partition
+ *	table (it shares the disk with AmigaOS); else its first partition
+ *	(the PC partition table of the first disks we made).
  */
 void device_init(void)
 {
   blkdev_t *fd;
+  uint16_t r;
 
   rtc_init();
   fd = fd_init();
 
   devide_init();
-  if (fd && !fd->lba_count[0])
-    amiga_root_dev = 0x0011;
+  if (fd && fd->lba_count[0])
+    return;				/* hda1 */
+  r = rdb_fuzix_minor(fd ? 1 : 0);
+  if (r)
+    amiga_root_dev = r;
+  else
+    amiga_root_dev = fd ? 0x0011 : 0x0001;
 }

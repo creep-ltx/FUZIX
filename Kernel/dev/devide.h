@@ -124,6 +124,9 @@ extern void devide_read_data(void);
 extern uint8_t ide_spt[IDE_DRIVE_COUNT];
 extern uint8_t ide_heads[IDE_DRIVE_COUNT];
 extern uint16_t ide_cyls[IDE_DRIVE_COUNT];
+#ifdef CONFIG_IDE_AUTO
+extern uint8_t ide_chs[IDE_DRIVE_COUNT];
+#endif
 
 #ifndef IDE_REG_INDIRECT
 #ifdef IDE_IS_MMIO
@@ -139,6 +142,9 @@ extern uint16_t ide_cyls[IDE_DRIVE_COUNT];
 #define ide_reg_lba_3	*((volatile uint8_t *)IDE_REG_LBA_3)
 #define ide_reg_sec_count *((volatile uint8_t *)IDE_REG_SEC_COUNT)
 #define ide_reg_status	*((volatile uint8_t *)IDE_REG_STATUS)
+#ifdef IDE_REG_ALTSTATUS
+#define ide_reg_altstatus *((volatile uint8_t *)IDE_REG_ALTSTATUS)
+#endif
 
 #else /* !MMIO */
 

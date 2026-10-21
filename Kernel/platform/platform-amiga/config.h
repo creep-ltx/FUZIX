@@ -57,6 +57,10 @@ extern unsigned short amiga_root_dev;
 #define MAX_BLKDEV 3
 
 #define CONFIG_IDE
+/* LBA, or cylinder/head/sector for drives without it */
+#define CONFIG_IDE_AUTO
+/* Amiga partition tables (RDB) as well as PC ones */
+#define CONFIG_RDB
 
 /* Battery-backed clock at $DC0000 (MSM6242 or RP5C01), if there is one:
    /dev/rtc, read by setdate at boot */

@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
-"""Make a Fuzix disk image bootable by Kickstart, with no floppy.
+"""Make a Fuzix hard disk image that Kickstart boots on its own.
 
-  mkrdb.py disk.img hdboot.hunk
+  mkrdb.py disk.img SIZE_MB filesys.img fuzix.bin hdboot.hunk
 
-The image keeps its PC partition table (MBR) in block 0, which Fuzix
-reads. This adds an Amiga Rigid Disk Block in blocks 1 onwards, which
-Kickstart reads (it looks for RDSK in blocks 0-15):
+The layout setup writes on an empty disk:
 
-  block 1   RDSK  geometry: 1 head, 32 blocks a track, 32 blocks a
-                  cylinder; cylinders 0-63 (blocks 0-2047) hold the RDB
-  block 2   PART  "FUZIX", bootable, DosType FUZ\\0, covering the first
-                  MBR partition (the Fuzix root file system)
-  block 3   FSHD  the "file system" for FUZ\\0: hdboot.hunk
-  block 4+  LSEG  hdboot.hunk, 492 bytes a block
+  block 0   RDSK  geometry: 1 head, 32 blocks a track (16K cylinders);
+                  cylinders 0-1 hold the partition table
+  block 1   PART  "FUZIX", bootable, DosType FUZ\\0, from cylinder 2
+  block 2   FSHD  the "file system" for FUZ\\0: hdboot.hunk, the loader
+  block 3+  LSEG  hdboot.hunk, 492 bytes a block
+  FUZIX partition: the Fuzix file system, then in the last RESERVED
+                  blocks the kernel (a header block "FUZK" + size, then
+                  the kernel). At most 65535 blocks: Fuzix reaches only
+                  that much of a device (it writes the kernel itself)
 
-Kickstart loads the hunk and starts it as the partition's handler; it
-then starts Fuzix. The same layout is written by the installer.
+Kickstart loads hdboot from the table and starts it as the partition's
+handler; it reads the kernel from the reserved blocks and starts it.
 """
 import struct
 import sys
@@ -24,7 +25,8 @@ BLOCK = 512
 HOSTID = 7
 HEADS, SECS = 1, 32
 CYLBLOCKS = HEADS * SECS
-RDB_CYLS = 64                      # cylinders 0-63 belong to the RDB
+RDB_CYLS = 2                       # cylinders 0-1 belong to the RDB
+RESERVED = 256                     # kernel blocks at the partition end
 DOSTYPE = 0x46555A00               # 'FUZ\0'
 NONE = 0xFFFFFFFF
 
@@ -44,9 +46,9 @@ def text(s, n):
 
 def rdsk(cyls):
     l = [0x5244534B, 0, 0, HOSTID, BLOCK, 0,
-         NONE, 2, 3, NONE] + [NONE] * 6
+         NONE, 1, 2, NONE] + [NONE] * 6
     l += [cyls, SECS, HEADS, 1, cyls, 0, 0, 0, cyls, cyls, 3, 0, 0, 0, 0, 0]
-    l += [1, RDB_CYLS * CYLBLOCKS - 1, RDB_CYLS, cyls - 1, CYLBLOCKS, 0, 0, 0]
+    l += [0, RDB_CYLS * CYLBLOCKS - 1, RDB_CYLS, cyls - 1, CYLBLOCKS, 0, 0, 0]
     l += text("FUZIX", 8) + text("FUZIX DISK", 16) + text("0.1", 4)
     return finish(l, 64)
 
@@ -56,7 +58,7 @@ def part(lowcyl, highcyl):
     name = bytes([5]) + b"FUZIX"
     l += list(struct.unpack(">8I", name.ljust(32, b"\0")))
     l += [0] * 15
-    env = [16, BLOCK // 4, 0, HEADS, 1, SECS, 2, 0, 0,
+    env = [16, BLOCK // 4, 0, HEADS, 1, SECS, 0, 0, 0,
            lowcyl, highcyl, 30, 0, 0x1FE00, 0x7FFFFFFE, 0, DOSTYPE]
     l += env
     return finish(l, 64)
@@ -86,28 +88,41 @@ def lsegs(data, first):
 
 
 def main() -> None:
-    img_path, hunk_path = sys.argv[1:3]
-    img = bytearray(open(img_path, "rb").read())
+    img_path, size_mb, fs_path, kernel_path, hunk_path = sys.argv[1:6]
+    blocks = int(size_mb) * 2048
+    fs = open(fs_path, "rb").read()
+    kernel = open(kernel_path, "rb").read()
     hunk = open(hunk_path, "rb").read()
+    cyls = blocks // CYLBLOCKS
+    fsblocks = (len(fs) + 511) // 512
+    if (len(kernel) + 511) // 512 + 1 > RESERVED:
+        sys.exit("kernel too big for the reserved blocks")
+    lo = RDB_CYLS
+    part_blocks = (fsblocks + RESERVED + CYLBLOCKS - 1) // CYLBLOCKS * CYLBLOCKS
+    if part_blocks > 65535:
+        sys.exit(f"file system too big: {fsblocks} blocks, "
+                 f"at most {65535 // CYLBLOCKS * CYLBLOCKS - RESERVED}")
+    hi = lo + part_blocks // CYLBLOCKS - 1
+    if hi >= cyls:
+        sys.exit("disk too small")
 
-    if img[510:512] != b"\x55\xAA":
-        sys.exit("no MBR in block 0")
-    first, count = struct.unpack("<II", img[446 + 8:446 + 16])
-    if first % CYLBLOCKS or count % CYLBLOCKS or first < RDB_CYLS * CYLBLOCKS:
-        sys.exit(f"partition 1 ({first}+{count}) must be cylinder aligned "
-                 f"and start at or after block {RDB_CYLS * CYLBLOCKS}")
-    cyls = len(img) // BLOCK // CYLBLOCKS
-
-    blocks = [rdsk(cyls), part(first // CYLBLOCKS, (first + count) // CYLBLOCKS - 1),
-              fshd(4)] + lsegs(hunk, 4)
-    if 1 + len(blocks) > RDB_CYLS * CYLBLOCKS:
-        sys.exit("loader too big for the RDB area")
-    for i, b in enumerate(blocks):
-        img[(1 + i) * BLOCK:(2 + i) * BLOCK] = b
+    img = bytearray(blocks * BLOCK)
+    tables = [rdsk(cyls), part(lo, hi), fshd(3)] + lsegs(hunk, 3)
+    if len(tables) > RDB_CYLS * CYLBLOCKS:
+        sys.exit("loader too big for the partition table area")
+    for i, b in enumerate(tables):
+        img[i * BLOCK:(i + 1) * BLOCK] = b
+    first = lo * CYLBLOCKS
+    img[first * BLOCK:first * BLOCK + len(fs)] = fs
+    k = first + part_blocks - RESERVED
+    header = struct.pack(">4sI", b"FUZK", len(kernel)).ljust(BLOCK, b"\0")
+    img[k * BLOCK:(k + 1) * BLOCK] = header
+    img[(k + 1) * BLOCK:(k + 1) * BLOCK + len(kernel)] = kernel
     open(img_path, "wb").write(img)
-    print(f"{img_path}: RDB in blocks 1-{len(blocks)}, FUZIX partition "
-          f"cylinders {first // CYLBLOCKS}-{(first + count) // CYLBLOCKS - 1}, "
-          f"loader {len(hunk)} bytes in {len(blocks) - 3} LSEG blocks")
+    print(f"{img_path}: {size_mb} MB, FUZIX partition cylinders {lo}-{hi} "
+          f"(kernel {len(kernel)} bytes, file system {fsblocks} blocks), "
+          f"loader {len(hunk)} bytes in {len(tables) - 3} LSEG blocks, "
+          f"{cyls - hi - 1} cylinders free")
 
 
 if __name__ == "__main__":

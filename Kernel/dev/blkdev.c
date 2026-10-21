@@ -5,6 +5,9 @@
 #include <printf.h>
 #include <blkdev.h>
 #include <mbr.h>
+#ifdef CONFIG_RDB
+#include <rdb.h>
+#endif
 
 /*
    Minor numbers
@@ -234,5 +237,10 @@ void blkdev_scan(blkdev_t *blk, uint_fast8_t flags)
 
     blk_op.blkdev = blk;
     mbr_parse(letter);
+#ifdef CONFIG_RDB
+    /* No PC partitions: an Amiga partition table, maybe */
+    if (blk->lba_count[0] == 0)
+        rdb_parse(letter);
+#endif
     kputchar('\n');
 }

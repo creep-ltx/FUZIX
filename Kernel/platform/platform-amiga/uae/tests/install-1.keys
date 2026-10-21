@@ -1,12 +1,8 @@
-wait Enter new date
-key Return
-wait Enter new time
-key Return
 wait Install Fuzix on it now
 type y
 key Return
-wait Type ERASE
-type ERASE
+wait Go on? (y/n)
+type y
 key Return
 wait Fuzix is installed
 shot installed

@@ -33,7 +33,8 @@ static void devide_delay(void)
 {
     timer_t timeout;
 
-    timeout = set_timer_ms(25);
+    /* at least 25ms: with a slow tick, wait one tick more */
+    timeout = set_timer_ms(25 + 1000 / TICKSPERSEC);
 
     while(!timer_expired(timeout))
        plt_idle();
@@ -59,6 +60,9 @@ void devide_init_drive(uint_fast8_t drive)
     blkdev_t *blk;
     uint8_t *buffer;
     uint_fast8_t select;
+#ifdef CONFIG_IDE_AUTO
+    uint_fast8_t i;
+#endif
 
     select = (drive & 1) ? 0xF0 : 0xE0;
 
@@ -94,12 +98,32 @@ void devide_init_drive(uint_fast8_t drive)
     if (!devide_wait(IDE_STATUS_READY))
         goto out;
 
-    /* send identify command */
-    devide_writeb(ide_reg_devhead, select);
-    devide_writeb(ide_reg_command, IDE_CMD_IDENTIFY);
+    /* A transfer the boot firmware left unfinished keeps DRQ up (seen
+       on an emulated A1200 booted from the disk: the "identify data"
+       was the last sector the boot ROM read). Read it away first. */
+    if (devide_readb(ide_reg_status) & IDE_STATUS_DATAREQUEST) {
+        uint16_t n = 0;
+        buffer = (uint8_t *)tmpbuf();
+        blk_op.is_user = false;
+        blk_op.addr = buffer;
+        blk_op.nblock = 1;
+        while ((devide_readb(ide_reg_status) & IDE_STATUS_DATAREQUEST) && n++ < 512)
+            devide_read_data();
+        tmpfree(buffer);
+    }
 
     /* allocate temporary sector buffer memory */
     buffer = (uint8_t *)tmpbuf();
+
+#ifdef CONFIG_IDE_AUTO
+    /* An emulated drive just used by the boot ROM has handed back stale
+       sector data as the identify block: check the default geometry
+       (every drive reports one) and ask again if it makes no sense */
+    for (i = 0; i < 4; i++) {
+#endif
+    /* send identify command */
+    devide_writeb(ide_reg_devhead, select);
+    devide_writeb(ide_reg_command, IDE_CMD_IDENTIFY);
 
     if (!devide_wait(IDE_STATUS_DATAREQUEST))
 	goto failout;
@@ -108,8 +132,30 @@ void devide_init_drive(uint_fast8_t drive)
     blk_op.addr = buffer;
     blk_op.nblock = 1;
     devide_read_data();
+#ifdef CONFIG_IDE_AUTO
+    if (buffer[6] >= 1 && buffer[6] <= 16 && buffer[12] >= 1 &&
+        buffer[12] <= 63 && (buffer[2] | buffer[3]))
+        break;
+#ifdef IDE_HAS_RESET
+    devide_delay();
+#endif
+    }
+    if (i == 4) {
+        kputs("no sense in its identify data.");
+        goto failout;
+    }
+#endif
 
-#ifdef CONFIG_IDE_CHS
+#if defined(CONFIG_IDE_AUTO)
+    /* LBA when the drive has it, else cylinder/head/sector */
+#ifdef CONFIG_IDE_BSWAP
+    ide_chs[drive] = !(buffer[98] & 0x02);
+#else
+    ide_chs[drive] = !(buffer[99] & 0x02);
+#endif
+    if (ide_chs[drive]) {
+#endif
+#if defined(CONFIG_IDE_CHS) || defined(CONFIG_IDE_AUTO)
     /* TODO: CHS + BSWAP */
     ide_spt[drive] = buffer[12];
     ide_heads[drive] = buffer[6];
@@ -123,7 +169,10 @@ void devide_init_drive(uint_fast8_t drive)
     devide_writeb(ide_reg_command, IDE_CMD_INIT_DEV_PARAM);
     if (!devide_wait(IDE_STATUS_READY))
         goto out;
-#else
+#endif
+#if defined(CONFIG_IDE_AUTO)
+    }
+#elif !defined(CONFIG_IDE_CHS)
 #ifdef CONFIG_IDE_BSWAP
     if(!(buffer[98] & 0x02)) {
 #else
@@ -150,11 +199,15 @@ void devide_init_drive(uint_fast8_t drive)
 	}
     }
 
-#ifdef CONFIG_IDE_CHS
+#if defined(CONFIG_IDE_CHS)
     blk->drive_lba_count = ide_heads[drive] * (unsigned int)ide_spt[drive] * (unsigned long)ide_cyls[drive];
 #else
     /* read out the drive's sector count */
     blk->drive_lba_count = le32_to_cpu(*((uint32_t*)&buffer[120]));
+#ifdef CONFIG_IDE_AUTO
+    if (ide_chs[drive])
+        blk->drive_lba_count = ide_heads[drive] * (unsigned int)ide_spt[drive] * (unsigned long)ide_cyls[drive];
+#endif
 #endif
 
     /* done with our temporary memory */

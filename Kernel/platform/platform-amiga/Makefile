@@ -5,7 +5,7 @@ CSRCS += devices.c main.c libc.c
 ASRCS = p68000.S crt0.S
 ASRCS += tricks.S
 
-DSRCS = ../../dev/devide.c ../../dev/mbr.c ../../dev/blkdev.c ../../dev/devide_discard.c
+DSRCS = ../../dev/devide.c ../../dev/mbr.c ../../dev/rdb.c ../../dev/blkdev.c ../../dev/devide_discard.c
 DOBJS = $(patsubst ../../dev/%.c,%.o, $(DSRCS))
 
 LSRCS = ../../lib/68000exception.c ../../lib/68000usercopy.c ../../lib/68000relocate.c
@@ -46,7 +46,7 @@ image:
 	../../syscall_proc.o ../../syscall_other.o ../../mm.o ../../flat.o \
 	../../blk512.o ../../tty.o ../../devsys.o ../../usermem.o ../../syscall_fs2.o \
 	../../syscall_fs3.o ../../syscall_exec32.o ../../syscall_exec.o \
-	blkdev.o devide.o devide_discard.o mbr.o 68000relocate.o \
+	blkdev.o devide.o devide_discard.o mbr.o rdb.o 68000relocate.o \
 	68000usercopy.o ../../cpu-68000/usermem_std-68000.o devtty.o video.o devfd.o rtc.o libc.o \
 	../../malloc.o ../../vt.o ../../font8x8.o \
 	../../level2.o ../../syscall_level2.o ../../select.o > ../../fuzix.map
@@ -57,14 +57,17 @@ image:
 	$(CROSS_LD) -Ttext=0 --oformat=binary -o hdboot.bin hdboot.o
 	mkdir -p $(IMAGES)
 	python3 mkadf.py bootblock.bin ../../fuzix.bin $(IMAGES)/fuzix.adf
-	python3 mkhunk.py hdboot.bin ../../fuzix.bin $(IMAGES)/fuzix.hunk
+	python3 mkhunk.py hdboot.bin $(IMAGES)/hdboot.hunk
 
 diskimage:
-	# A 40MB disk: MBR partition table, the file system from block 2048
-	dd if=$(FUZIX_ROOT)/Standalone/filesystem-src/parttab.40M of=$(IMAGES)/disk.img bs=40017920 conv=sync
-	dd if=$(IMAGES)/filesys.img of=$(IMAGES)/disk.img bs=512 seek=2048 conv=notrunc
-	# Bootable by Kickstart: an RDB with the loader and kernel in it
-	python3 mkrdb.py $(IMAGES)/disk.img $(IMAGES)/fuzix.hunk
+	# A 40MB disk Kickstart boots on its own: an Amiga partition table
+	# with the loader in it, the kernel and file system in a FUZIX
+	# partition, the rest free (as setup leaves an empty disk)
+	# (its file system leaves room for the kernel in a 32 MB partition)
+	cd $(FUZIX_ROOT)/Standalone/filesystem-src && ./build-filesystem-ng -X -y \
+		-f $(IMAGES)/hdfs.img -g 256 65248 -p platform-amiga >/dev/null
+	python3 mkrdb.py $(IMAGES)/disk.img 40 $(IMAGES)/hdfs.img \
+		../../fuzix.bin $(IMAGES)/hdboot.hunk
 	# The whole system on one floppy: 1560 blocks after the kernel
 	cd $(FUZIX_ROOT)/Standalone/filesystem-src && ./build-filesystem-ng -X -y \
 		-f $(IMAGES)/floppyfs.img -g 64 1560 -p amiga-floppy >/dev/null

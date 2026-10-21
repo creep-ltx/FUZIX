@@ -12,6 +12,7 @@
 #   ADF=none                    no floppy (boot from the hard disk)
 #   HD=none                     no hard disk
 #   HD=blank                    an empty 40MB hard disk
+#   HD=/some/disk.hdf           a copy of that disk image
 #   FLOPPY_SPEED=100            real floppy speed (default 0 = turbo)
 #   KEEP_DISK=1                 keep the disks the last run left
 #   KEYS=<file>                 typed on the Amiga keyboard (uae/vkey):
@@ -37,7 +38,10 @@ rm -f "$OUT"/*.png "$OUT"/serial.log "$OUT"/keys.log
 # The hard disk is written to: run from a copy (KEEP_DISK=1 reuses the
 # last run's copy, to see what a previous run changed)
 ADF="${ADF:-fuzix.adf}"
-if [ "${HD:-}" = blank ]; then
+if [ "${HD#/}" != "${HD:-}" ]; then
+	# HD=/path/to/image.hdf: a copy of that disk
+	[ -n "${KEEP_DISK:-}" ] && [ -f "$OUT/disk.img" ] || cp "$HD" "$OUT/disk.img"
+elif [ "${HD:-}" = blank ]; then
 	# An empty 40MB disk, to install onto
 	[ -n "${KEEP_DISK:-}" ] && [ -f "$OUT/disk.img" ] ||
 		dd if=/dev/zero of="$OUT/disk.img" bs=1M count=40 status=none
@@ -100,12 +104,17 @@ if [ -n "${KEYS:-}" ] && [ -n "$DISP" ]; then
 	(while read -r cmd arg; do
 		case "$cmd" in
 		sleep) sleep "$arg" ;;
-		type) WAYLAND_DISPLAY=$DISP "$HERE/vkey/vkey" "$arg" ;;
-		key) WAYLAND_DISPLAY=$DISP "$HERE/vkey/vkey" -k "$arg" ;;
-		ctrl) WAYLAND_DISPLAY=$DISP "$HERE/vkey/vkey" -c "$arg" ;;
-		wait) python3 "$HERE/waittext.py" "$DISP" 400 "$arg" ||
-			echo "wait timed out: $arg" >> "$OUT/keys.log" ;;
-		shot) WAYLAND_DISPLAY=$DISP grim "$OUT/$arg.png" ;;
+		# </dev/null: the loop reads the key script on stdin, and
+		# a helper reading it too would swallow the rest
+		type) WAYLAND_DISPLAY=$DISP "$HERE/vkey/vkey" "$arg" </dev/null ;;
+		key) WAYLAND_DISPLAY=$DISP "$HERE/vkey/vkey" -k "$arg" </dev/null ;;
+		ctrl) WAYLAND_DISPLAY=$DISP "$HERE/vkey/vkey" -c "$arg" </dev/null ;;
+		# then a second more: text on screen is not yet a program
+		# reading its input (keys typed at once were lost)
+		wait) python3 "$HERE/waittext.py" "$DISP" 400 "$arg" </dev/null ||
+			echo "wait timed out: $arg" >> "$OUT/keys.log"
+			sleep 1 ;;
+		shot) WAYLAND_DISPLAY=$DISP grim "$OUT/$arg.png" </dev/null ;;
 		quit) pkill -TERM -P "$EMU"; kill "$EMU" ;;
 		esac
 	done < "$KEYS") >/dev/null 2>&1 &

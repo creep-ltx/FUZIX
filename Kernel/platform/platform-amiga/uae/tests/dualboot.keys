@@ -1,0 +1,17 @@
+wait Install Fuzix on it now
+type y
+key Return
+
+wait stop, change nothing
+shot table
+type f
+key Return
+wait Start Fuzix when
+type y
+key Return
+wait Go on?
+type y
+key Return
+wait Fuzix is installed
+shot installed
+quit

@@ -1,12 +1,16 @@
 # Amiga-only programs (68000 builds only)
 include $(FUZIX_ROOT)/Target/rules.68000
 
-APPS = setup keymap
+APPS = keymap
 
-all: $(APPS) amigaread keymaps
+all: $(APPS) setup amigaread keymaps
 
 $(APPS): %: %.o
 	$(LINKER) $(CRT0) $^ -o $@ $(LINKER_OPT) $(LINKER_TAIL)
+
+# setup reads partition tables and copies trees: 32K, not the 8K default
+setup: setup.o
+	$(LINKER) $(CRT0) $^ -o $@ -s 32768 $(LINKER_OPT) $(LINKER_TAIL)
 
 # AmigaDOS disks (adf.c is CFile's reader). 128K for directory listings.
 amigaread: amigaread.o adf.o
@@ -31,5 +35,5 @@ keymaps:
 	fi
 
 clean:
-	rm -f *.o $(APPS) amigaread
+	rm -f *.o $(APPS) setup amigaread
 	rm -rf keymaps fuzix-amigakeymaps.pkg

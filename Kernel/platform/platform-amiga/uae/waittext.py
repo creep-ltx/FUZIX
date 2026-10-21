@@ -22,10 +22,12 @@ def fuzzy_in(want, seen):
     """OCR misreads a letter now and then (time -> tine, l -> 1): accept
     a stretch of the screen that matches all but a couple of letters."""
     n = len(want)
-    if n < 6:
-        return False
-    allowed = 1 if n < 12 else 2
-    for i in range(0, max(1, len(seen) - n + 1)):
+    if n < 10:
+        return False            # short texts: exact only (false hits)
+    allowed = 1 if n < 16 else 2
+    # whole stretches of n letters only: zip() on a shorter one (an empty
+    # screen) would count as a perfect match
+    for i in range(0, len(seen) - n + 1):
         if sum(a != b for a, b in zip(want, seen[i:i + n])) <= allowed:
             return True
     return False

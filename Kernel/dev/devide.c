@@ -26,6 +26,17 @@ bool devide_wait(uint_fast8_t bits)
 
     timeout = set_timer_sec(20);
 
+#ifdef IDE_REG_ALTSTATUS
+    /* ATA: wait 400ns after a command before the status means anything;
+       four reads of the alternate status take that long. Without it a
+       fast machine reads the status from before the command (seen on an
+       emulated A1200: stale DRQ, the identify data never came) */
+    devide_readb(ide_reg_altstatus);
+    devide_readb(ide_reg_altstatus);
+    devide_readb(ide_reg_altstatus);
+    devide_readb(ide_reg_altstatus);
+#endif
+
     while(true){
         status = devide_readb(ide_reg_status);
 
@@ -49,7 +60,17 @@ bool devide_wait(uint_fast8_t bits)
     }
 }
 
-#ifdef CONFIG_IDE_CHS
+/*
+ *	CONFIG_IDE_AUTO: both ways of addressing, picked per drive when it
+ *	is found - LBA if it has it, cylinder/head/sector if not (early IDE
+ *	drives, and some emulated ones).
+ */
+#if defined(CONFIG_IDE_CHS) || defined(CONFIG_IDE_AUTO)
+
+#ifdef CONFIG_IDE_AUTO
+uint8_t ide_chs[IDE_DRIVE_COUNT];
+#define ide_setup_block ide_setup_chs
+#endif
 
 uint8_t ide_spt[IDE_DRIVE_COUNT];
 uint8_t ide_heads[IDE_DRIVE_COUNT];
@@ -101,7 +122,12 @@ static void ide_setup_block(uint_fast8_t drive)
 /* kprintf("\nsb %u %u %u\n", (unsigned)cyl, (unsigned)head, (unsigned)sector); */
 }
 
-#else
+#endif
+#if !defined(CONFIG_IDE_CHS)
+#ifdef CONFIG_IDE_AUTO
+#undef ide_setup_block
+#define ide_setup_block ide_setup_lba
+#endif
 static void ide_setup_block(uint_fast8_t drive)
 {
 #if defined(__SDCC_z80) || defined(__SDCC_z180) || defined(__SDCC_gbz80) || defined(__SDCC_r2k) || defined(__SDCC_r3k)
@@ -118,6 +144,16 @@ static void ide_setup_block(uint_fast8_t drive)
     devide_writeb(ide_reg_lba_0, blk_op.lba);
 #endif
 }
+#ifdef CONFIG_IDE_AUTO
+#undef ide_setup_block
+static void ide_setup_block(uint_fast8_t drive)
+{
+    if (ide_chs[drive])
+        ide_setup_chs(drive);
+    else
+        ide_setup_lba(drive);
+}
+#endif
 #endif
 
 uint_fast8_t devide_transfer_sector(void)
