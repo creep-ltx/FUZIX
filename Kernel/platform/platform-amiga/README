@@ -163,4 +163,7 @@ To do
   drive busy-waits during a transfer (nothing else runs)
 - A500/A2000 (68000, no IDE), A4000 IDE base
 - Mouse, sound
-- NTSC (60Hz tick)
+- 640x480 on ECS (the A600 showed it wrong in both emulators), and an
+  interlaced 640x512 mode for 15kHz monitors such as the 1084
+- setdate asked for the date in Amiberry although its battery clock was
+  found and read
