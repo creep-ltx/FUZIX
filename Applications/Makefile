@@ -89,6 +89,7 @@ ar:
 
 clean:
 	(cd util; $(MAKE) -f Makefile.$(USERCPU) clean)
+	(cd amiga; [ ! -f Makefile.$(USERCPU) ] || $(MAKE) -f Makefile.$(USERCPU) clean)
 	(cd V7/cmd; $(MAKE) -f Makefile.$(USERCPU) clean)
 	(cd V7/cmd/sh; $(MAKE) -f Makefile.$(USERCPU) clean)
 	(cd V7/games; $(MAKE) -f Makefile.$(USERCPU) clean)

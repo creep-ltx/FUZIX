@@ -46,7 +46,7 @@ const char *syscall_name[NR_SYSCALL] = {
 	"pipe",
 	"getgid",
 	"times",
-	"utime",
+	"_utime",
 	"geteuid",
 	"getegid",
 	"chroot",

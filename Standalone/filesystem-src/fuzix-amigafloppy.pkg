@@ -38,5 +38,7 @@ if-file  ../../Applications/amiga/setup
 
 f 0755 /bin/setup	../../Applications/amiga/setup
 f 0755 /bin/keymap	../../Applications/amiga/keymap
+f 0755 /bin/amigaread	../../Applications/amiga/amigaread
+l /bin/amigaread /bin/amigadir
 d 0755 /usr/lib/fuzix
 f 0644 /usr/lib/fuzix/fuzix.hunk	../../Images/amiga/fuzix.hunk

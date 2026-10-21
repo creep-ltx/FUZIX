@@ -90,6 +90,9 @@ What works
   Alt, Caps Lock, dead keys), US built in; cursor keys, F1-F10, Help.
   The keymaps are converted at build time from a Devs/Keymaps folder of
   your own Workbench: make ... AMIGA_KEYMAPS=<that folder>
+- AmigaDOS disks: amigadir and amigaread list and copy files from
+  AmigaDOS floppies (or .adf / hard disk images): OFS, FFS and every
+  variant up to OS 3.2's long names (CFile's reader, adf.c)
 - Battery clock: MSM6242 or RP5C01 at $DC0000 (A500+/A600/A2000/A3000/
   A4000, clock-port and accelerator clocks) as /dev/rtc: no date and
   time questions at boot; a time set with setdate is saved to it

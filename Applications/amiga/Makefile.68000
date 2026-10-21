@@ -3,10 +3,14 @@ include $(FUZIX_ROOT)/Target/rules.68000
 
 APPS = setup keymap
 
-all: $(APPS) keymaps
+all: $(APPS) amigaread keymaps
 
 $(APPS): %: %.o
 	$(LINKER) $(CRT0) $^ -o $@ $(LINKER_OPT) $(LINKER_TAIL)
+
+# AmigaDOS disks (adf.c is CFile's reader). 128K for directory listings.
+amigaread: amigaread.o adf.o
+	$(LINKER) $(CRT0) $^ -o $@ -s 131072 $(LINKER_OPT) $(LINKER_TAIL)
 
 # Keymaps: free ones made from the X keyboard layouts (xkeyboard-config,
 # MIT licence; needs libxkbcommon and the layouts installed, as on any
@@ -27,5 +31,5 @@ keymaps:
 	fi
 
 clean:
-	rm -f *.o $(APPS)
+	rm -f *.o $(APPS) amigaread
 	rm -rf keymaps fuzix-amigakeymaps.pkg
