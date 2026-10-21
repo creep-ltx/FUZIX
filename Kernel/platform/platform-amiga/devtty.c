@@ -50,7 +50,7 @@ static struct vt_switch ttysave[MAX_VT];
    video mode it runs in. */
 #define PAL_CLOCK	3546895UL
 #define NTSC_CLOCK	3579545UL
-static uint32_t colour_clock = PAL_CLOCK;
+uint32_t colour_clock = PAL_CLOCK;
 
 static const uint32_t baudrate[] = {
 	0, 50, 75, 110, 134, 150, 300, 600, 1200, 2400, 4800, 9600,
@@ -375,10 +375,41 @@ static const struct fontinfo fontinfo = {
 	0, 255, 0, 0, FONT_INFO_8X8
 };
 
+/* A new screen mode: every screen cleared, every cursor at the top */
+static int set_mode(uint8_t m)
+{
+	irqflags_t irq;
+	uint8_t i, was;
+	int err;
+
+	irq = di();
+	vt_save(&ttysave[curtty]);
+	was = video_get_mode() & 15;
+	err = video_set_mode(m & ~VTMODE_BOOT, m & VTMODE_BOOT);
+	if ((video_get_mode() & 15) != was)
+		for (i = 0; i < MAX_VT; i++) {
+			ttysave[i].cursorx = 0;
+			ttysave[i].cursory = 0;
+		}
+	vt_load(&ttysave[curtty]);
+	irqrestore(irq);
+	if (err) {
+		udata.u_error = err;
+		return -1;
+	}
+	return 0;
+}
+
 int amiga_vt_ioctl(uint_fast8_t minor, uarg_t request, char *data)
 {
 	if (minor <= MAX_VT) {
 		switch (request) {
+		case VTSETMODE:
+			if (esuper())
+				return -1;
+			return set_mode(ugetc(data));
+		case VTGETMODE:
+			return video_get_mode();
 		case VTFONTINFO:
 			return uput(&fontinfo, data, sizeof(fontinfo));
 		case VTSETFONT:

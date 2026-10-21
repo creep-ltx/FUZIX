@@ -42,11 +42,13 @@ static uint8_t rtc_get(uint8_t *t);
 #define RP_MODE_TIMER	0x08
 #define RP_BANK(n)	(n)
 
+/* Wait n times 64us: PAL/NTSC scan lines, two at 31kHz */
 static void wait_lines(uint16_t n)
 {
 	volatile uint8_t *vpos = (volatile uint8_t *)0xDFF006;
 	uint8_t c;
 
+	n = (n * lines_per_ms + 15) / 16;
 	while (n--) {
 		c = *vpos;
 		while (*vpos == c)

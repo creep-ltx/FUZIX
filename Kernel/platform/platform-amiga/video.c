@@ -1,15 +1,21 @@
 /*
  *	Text screens: 640x256 PAL hires, 80x32 characters of 8x8 (640x200
- *	and 80x25 on NTSC), one per virtual console (tty1-tty4), all at the
- *	top of chip RAM. The Copper shows one of them; Amiga+F1..F4 picks
- *	which.
+ *	and 80x25 on NTSC, 640x480 and 80x60 in the 31kHz mode), one per
+ *	virtual console (tty1-tty4), all at the top of chip RAM. The Copper
+ *	shows one of them; Amiga+F1..F4 picks which.
+ *
+ *	Screen modes (screenmode, VTSETMODE): PAL, NTSC and 640x480 at
+ *	31kHz ("Productivity", the timings of Linux's amifb "multiscan").
+ *	The machine starts in its own; another comes from /etc/screenmode
+ *	at boot. Memory for the largest mode the chips can show is kept at
+ *	boot; the first VTSETMODE (from /etc/rc) gives back what the chosen
+ *	mode does not use.
  *
  *	AGA machines get four bitplanes (16 colours, the vt's ink and paper)
  *	fetched 64 bits at a time, so the display leaves the CPU most of the
  *	chip bus; older chips get one plane, as before.
  *
- *	The planes of a line lie one after the other (interleaved), so a
- *	character cell is a column of bytes, one per plane and line.
+ *	Each plane of a screen is a block of its own (see planebytes).
  *
  *	Scrolling copies nothing: each screen is a ring of text rows and
  *	the Copper starts the display at the top row, then jumps back to
@@ -26,13 +32,39 @@
 #define MAXPLANES	4
 #define COPWORDS	48		/* one Copper list */
 
-uint32_t video_base;
-uint8_t ntsc;				/* 60Hz, 200 lines */
-uint8_t vt_rows = 32;			/* 25 on NTSC */
+#define MODE_PAL	0
+#define MODE_NTSC	1
+#define MODE_VGA	2		/* 640x480, 31kHz */
+#define NMODES		3
+
+uint32_t video_base;			/* the lowest byte kept for screens */
+uint8_t ntsc;				/* the machine's own video is NTSC */
+uint8_t vt_rows = 32;
+uint8_t lines_per_ms = 16;
+uint32_t frame_mhz = 50000;
+
+static uint8_t mode, native, avail;
+static uint8_t committed;		/* the spare memory was given back */
+static uint8_t beam_set;		/* BEAMCON0 written by us */
+static uint32_t screens_top;		/* the screens end here, the Copper
+					   lists follow */
+/* The Copper: the first displayed line, the position after a line's
+   last bitplane fetch (pointers can change from there), one near the
+   line's end (to get past lines 255 and 511) */
+static uint16_t first_line;
+static uint8_t hend, hlast;
+/* 640x480 in four planes has no time between two lines for all eight
+   pointer moves: where the ring wraps, planes 0-1 move after one line
+   and 2-3 after the next, and those show a copy of the ring's first
+   pixel line kept just after the ring (the guard line) */
+static uint8_t split;
 
 static uint8_t planes;			/* 4 on AGA, else 1 */
-static uint16_t linebytes;		/* one pixel line, every plane */
-static uint16_t rowbytes;		/* one text row */
+/* Each plane of a screen is a block of its own, lines COLS bytes apart
+   (the modulo is 0: FS-UAE adds the modulo too early in 31kHz super
+   hires, which only shows when it is not 0) */
+#define rowbytes	(COLS * 8)	/* one text row of one plane */
+static uint32_t planebytes;		/* one plane of a screen */
 static uint32_t screenbytes;
 
 struct vscreen {
@@ -209,10 +241,35 @@ static uint16_t *set_planes(uint16_t *c, uint8_t *p)
 	uint32_t a;
 
 	for (k = 0; k < planes; k++) {
-		a = (uint32_t)p + k * COLS;
+		a = (uint32_t)p + k * planebytes;
 		*c++ = 0x00E0 + 4 * k; *c++ = a >> 16;
 		*c++ = 0x00E2 + 4 * k; *c++ = a & 0xFFFF;
 	}
+	return c;
+}
+
+/* Planes from..to-1 of a line at p */
+static uint16_t *set_some(uint16_t *c, uint8_t *p, uint8_t from, uint8_t to)
+{
+	uint32_t a;
+
+	for (; from < to; from++) {
+		a = (uint32_t)p + from * planebytes;
+		*c++ = 0x00E0 + 4 * from; *c++ = a >> 16;
+		*c++ = 0x00E2 + 4 * from; *c++ = a & 0xFFFF;
+	}
+	return c;
+}
+
+/* Wait for a line after its last fetch. The Copper compares only the
+   low 8 bits of the line: first wait out lines 255 and 511 */
+static uint16_t *cwait(uint16_t *c, uint16_t line, uint16_t *passed)
+{
+	while (line >= *passed + 256) {
+		*c++ = 0xFF01 | hlast; *c++ = 0xFFFE;
+		*passed += 256;
+	}
+	*c++ = (line & 0xFF) << 8 | hend | 1; *c++ = 0xFFFE;
 	return c;
 }
 
@@ -224,7 +281,7 @@ static void copper_build(void)
 	struct vscreen *v = vs + shown;
 	irqflags_t irq;
 	uint16_t *c;
-	uint16_t line;
+	uint16_t line, passed = 0;
 	uint8_t n;
 
 	irq = di();
@@ -232,12 +289,14 @@ static void copper_build(void)
 	c = coplist[n];
 	c = set_planes(c, v->base + v->top * rowbytes);
 	if (v->top) {
-		line = 0x2C + (ROWS - v->top) * 8 - 1;
-		if (line > 0xFF) {
-			*c++ = 0xFFDF; *c++ = 0xFFFE;	/* past line 255 */
-		}
-		*c++ = (line & 0xFF) << 8 | 0xE1; *c++ = 0xFFFE;
-		c = set_planes(c, v->base);
+		line = first_line + (ROWS - v->top) * 8 - 1;
+		c = cwait(c, line, &passed);
+		if (split) {
+			c = set_some(c, v->base, 0, 2);
+			c = cwait(c, line + 1, &passed);
+			c = set_some(c, v->base + COLS, 2, 4);
+		} else
+			c = set_planes(c, v->base);
 	}
 	*c++ = 0xFFFF; *c++ = 0xFFFE;
 	COP1LCH = (uint32_t)coplist[n] >> 16;
@@ -252,16 +311,16 @@ void video_vblank(void)
 	cop_run = cop_next;
 }
 
-static uint8_t is_aga(void)
+/* Lisa answers 0xF8, ECS Denise 0xFC; OCS Denise has no id register
+   and gives whatever was last on the bus */
+static uint8_t denise_id(void)
 {
-	uint8_t i;
+	uint8_t i, id = LISAID & 0xFF;
 
-	/* Lisa answers 0xF8; OCS Denise has no id register and gives
-	   whatever was last on the bus */
 	for (i = 0; i < 16; i++)
-		if ((LISAID & 0xFF) != 0xF8)
+		if ((LISAID & 0xFF) != id)
 			return 0;
-	return 1;
+	return id;
 }
 
 /* The beam's last line: 312 on PAL, 262 on NTSC. That is the machine's
@@ -286,62 +345,173 @@ static uint8_t is_ntsc(void)
 	return max && max < 280;
 }
 
-void video_init(void)
+static uint8_t mode_rows(uint8_t m)
+{
+	return m == MODE_VGA ? 60 : m == MODE_NTSC ? 25 : 32;
+}
+
+/* One plane of a screen in mode m: the rows, the guard line if split
+   (a multiple of 8 bytes, for the 64-bit fetches) */
+static uint32_t plane_bytes(uint8_t m)
+{
+	uint32_t n = (uint32_t)mode_rows(m) * rowbytes;
+
+	if (m == MODE_VGA && planes == 4)
+		n += COLS;
+	return n;
+}
+
+static uint32_t mode_bytes(uint8_t m)
+{
+	return planes * plane_bytes(m);
+}
+
+/* The beam and the bitplane fetch for the mode in "mode" */
+static void set_display(void)
+{
+	uint8_t aga = planes == 4;
+
+	if (mode == MODE_VGA) {
+		/* amifb's "multiscan": 115 colour clocks a line (30.8kHz),
+		   525 lines (58.7Hz on a PAL crystal), super hires */
+		HTOTAL = 0x0072;
+		HSSTRT = 0x000E;
+		HSSTOP = 0x0017;
+		HBSTRT = aga ? 0x0301 : 0x0072;
+		HBSTOP = aga ? 0x0324 : 0x0022;
+		HCENTER = 0x0047;
+		VTOTAL = 0x020C;
+		VSSTRT = 0x0008;
+		VSSTOP = 0x0010;
+		VBSTRT = 0x020C;
+		VBSTOP = 0x002C;
+		/* HARDDIS VARVBEN LOLDIS VARVSYEN VARHSYEN VARBEAMEN PAL
+		   VARCSYEN; syncs active low */
+		BEAMCON0 = 0x5BB0;
+		beam_set = 1;
+		BPLCON0 = aga ? 0x4241 : 0x1241;	/* shres, ECSENA */
+		FMODE = aga ? 3 : 0;
+		DDFSTRT = aga ? 0x0018 : 0x001E;
+		DDFSTOP = aga ? 0x0060 : 0x0066;
+		BPLCON1 = aga ? 0x3366 : 0x0022;
+		BPLCON3 = aga ? 0x0CC1 : 0x0001;	/* EXTBLKEN */
+		DIWSTRT = aga ? 0x2D47 : 0x2D43;
+		DIWSTOP = aga ? 0x0DE7 : 0x0DE3;
+		DIWHIGH = aga ? 0x1A18 : 0x0200;
+		first_line = 0x2D;
+		hend = aga ? 0x68 : 0x6E;
+		hlast = 0x70;
+		lines_per_ms = 31;
+		frame_mhz = colour_clock * 1000UL / (115UL * 525);
+		split = aga;
+	} else {
+		/* PAL 227 colour clocks x 313 lines, NTSC 227.5 x 263 */
+		if (beam_set || mode != native)
+			BEAMCON0 = mode == MODE_PAL ? 0x0020 : 0;
+		if (aga) {
+			BPLCON0 = 0xC200;	/* hires, four planes, colour */
+			FMODE = 3;		/* 64-bit bitplane fetches */
+			DDFSTRT = 0x0030;	/* the hires values for FMODE 3 */
+			DDFSTOP = 0x00C0;
+		} else {
+			BPLCON0 = 0x9200;	/* hires, one plane, colour */
+			FMODE = 0;
+			DDFSTRT = 0x003C;
+			DDFSTOP = 0x00D4;
+		}
+		BPLCON1 = 0;
+		BPLCON3 = 0x0C00;	/* AGA: ECS-compatible defaults */
+		/* (writing these turns DIWHIGH off) */
+		DIWSTRT = 0x2C81;
+		DIWSTOP = mode == MODE_NTSC ? 0xF4C1 : 0x2CC1;
+		first_line = 0x2C;
+		hend = 0xE0;
+		hlast = 0xDE;
+		lines_per_ms = 16;
+		frame_mhz = mode == MODE_NTSC ?
+			colour_clock * 1000UL / 59833 :	/* 227.5 x 263 */
+			colour_clock * 1000UL / (227UL * 313);
+		split = 0;
+	}
+	BPLCON2 = 0;
+	BPLCON4 = 0x0011;
+	BPL1MOD = 0;
+	BPL2MOD = 0;
+}
+
+/* Go to mode m: every screen is cleared, its cursor forgotten */
+static void apply_mode(uint8_t m)
 {
 	uint32_t *p, n;
-	uint16_t i;
+	uint8_t i;
 
-	ntsc = is_ntsc();
-	if (ntsc)
-		vt_rows = 25;
-	planes = is_aga() ? 4 : 1;
-	linebytes = COLS * planes;
-	rowbytes = linebytes * 8;
-	screenbytes = (uint32_t)rowbytes * ROWS;
-
-	/* 64-bit fetches want the planes on 8-byte boundaries */
-	video_base = (chip_top - MAX_VT * screenbytes - 4 * COPWORDS) & ~0xFFUL;
+	mode = m;
+	vt_rows = mode_rows(m);
+	planebytes = plane_bytes(m);
+	screenbytes = mode_bytes(m);
+	DMACON = 0x0100;			/* bitplanes off meanwhile */
+	blit_wait();
 	for (i = 0; i < MAX_VT; i++) {
-		vs[i].base = (uint8_t *)(video_base + i * screenbytes);
+		vs[i].base = (uint8_t *)(screens_top - (i + 1) * screenbytes);
+		vs[i].top = 0;
 		vs[i].cur_y = -1;
 	}
-	coplist[0] = (uint16_t *)(video_base + MAX_VT * screenbytes);
-	coplist[1] = coplist[0] + COPWORDS;
-
-	p = (uint32_t *)video_base;
+	p = (uint32_t *)vs[MAX_VT - 1].base;
 	for (n = MAX_VT * screenbytes / 4; n; n--)
 		*p++ = 0;
+	set_display();
+	copper_build();
+	cop_run = cop_next;
+	COPJMP1 = 0;
+	DMACON = 0x8100;
+}
 
-	if (planes == 4) {
-		BPLCON0 = 0xC200;	/* hires, four bitplanes, colour */
-		FMODE = 3;		/* 64-bit bitplane fetches */
-		DDFSTRT = 0x0030;	/* the hires values for FMODE 3 */
-		DDFSTOP = 0x00C0;
-	} else {
-		BPLCON0 = 0x9200;	/* hires, one bitplane, colour */
-		FMODE = 0;
-		DDFSTRT = 0x003C;
-		DDFSTOP = 0x00D4;
+void video_init(void)
+{
+	uint32_t need, most = 0;
+	uint16_t i;
+	uint8_t id, m;
+
+	ntsc = is_ntsc();
+	native = ntsc ? MODE_NTSC : MODE_PAL;
+	id = denise_id();
+	planes = id == 0xF8 ? 4 : 1;
+
+
+	/* PAL and NTSC need an ECS Agnus (VPOSR id bit 5) to change; the
+	   31kHz mode AGA for now. (ECS Denise has super hires too, and the
+	   ECS values below are amifb's, but an A600 in FS-UAE and Amiberry
+	   showed them cut short or garbled: not offered until that is
+	   understood.) */
+	avail = 1 << native;
+	if ((CUSTOM(0x004) >> 8) & 0x20) {
+		avail |= 1 << MODE_PAL | 1 << MODE_NTSC;
+		if (planes == 4)
+			avail |= 1 << MODE_VGA;
 	}
-	BPLCON1 = 0;
-	BPLCON2 = 0;
-	BPLCON3 = 0x0C00;	/* AGA: ECS-compatible defaults */
-	BPLCON4 = 0x0011;
-	BPL1MOD = linebytes - COLS;
-	BPL2MOD = linebytes - COLS;
-	DIWSTRT = 0x2C81;
-	DIWSTOP = ntsc ? 0xF4C1 : 0x2CC1;	/* 200 or 256 lines */
+
+	/* The Copper lists at the top of chip RAM, the screens below,
+	   room for the largest mode below them */
+	coplist[0] = (uint16_t *)((chip_top - 4 * COPWORDS) & ~7UL);
+	coplist[1] = coplist[0] + COPWORDS;
+	screens_top = (uint32_t)coplist[0];
+	for (m = 0; m < NMODES; m++)
+		if (avail & (1 << m)) {
+			need = MAX_VT * mode_bytes(m);
+			if (need > most)
+				most = need;
+		}
+	video_base = (screens_top - most) & ~0xFFUL;
+
 	if (planes == 4)
-		for (i = 0; i < 16; i++)
-			COLOR(i) = igrb(i);
+		for (m = 0; m < 16; m++)
+			COLOR(m) = igrb(m);
 	else {
 		COLOR(0) = 0x0000;
 		COLOR(1) = 0x0CCC;
 	}
 	cop_run = 1;
-	copper_build();
-	cop_run = cop_next;
-	COPJMP1 = 0;
+	apply_mode(native);
 	/* SET | DMAEN | BPLEN | COPEN | BLTEN */
 	DMACON = 0x8000 | 0x0200 | 0x0100 | 0x0080 | 0x0040;
 
@@ -372,13 +542,87 @@ void set_visible_vt(uint8_t n)
 	copper_build();
 }
 
-static uint8_t *cell(int8_t y, int8_t x)
+/* The first VTSETMODE: the memory kept for a larger mode than the one
+   in use goes to the programs */
+static void commit(void)
+{
+	uint32_t low = screens_top - MAX_VT * screenbytes;
+
+	committed = 1;
+	low &= ~0xFFUL;
+	if (low > video_base + 4096) {
+		kmemaddblk((void *)video_base, low - video_base);
+		video_base = low;
+		procmem = (kmemavail() + kmemused()) >> 10;
+	}
+}
+
+/* What commit() will give back if the machine's own mode stays */
+uint32_t video_spare(void)
+{
+	return ((screens_top - MAX_VT * mode_bytes(native)) & ~0xFFUL) -
+		video_base;
+}
+
+/* VTSETMODE: 0 or an error. At boot (from /etc/rc) the left mouse
+   button held keeps the machine's own mode, and the spare memory is
+   given back whatever happens. Called with interrupts off. */
+int video_set_mode(uint8_t m, uint8_t boot)
+{
+	int err = 0;
+
+	if (m >= NMODES || !(avail & (1 << m)))
+		err = EINVAL;
+	else if (boot && m != native && !(CIAA(0) & 0x40))
+		err = EBUSY;
+	else if (MAX_VT * mode_bytes(m) > screens_top - video_base)
+		err = ENOMEM;		/* only after a restart */
+	else if (m != mode)
+		apply_mode(m);
+	if (boot && !committed)
+		commit();
+	return err;
+}
+
+/* VTGETMODE: the mode, the machine's own << 4, the ones it can show
+   << 8, the ones that fit now (without a restart) << 12 */
+uint16_t video_get_mode(void)
+{
+	uint16_t fit = 0;
+	uint8_t m;
+
+	for (m = 0; m < NMODES; m++)
+		if ((avail & (1 << m)) &&
+		    MAX_VT * mode_bytes(m) <= screens_top - video_base)
+			fit |= 1 << m;
+	return mode | native << 4 | (uint16_t)avail << 8 | fit << 12;
+}
+
+/* The guard line (split) is a copy of the ring's first pixel line */
+static void guard_sync(struct vscreen *v)
+{
+	uint8_t k;
+
+	if (!split)
+		return;
+	blit_wait();
+	for (k = 0; k < planes; k++)
+		memcpy(v->base + k * planebytes + (uint16_t)ROWS * rowbytes,
+		       v->base + k * planebytes, COLS);
+}
+
+static uint8_t ring_row(int8_t y)
 {
 	uint8_t r = y + act->top;
 
 	if (r >= ROWS)
 		r -= ROWS;
-	return act->base + (uint16_t)r * rowbytes + x;
+	return r;
+}
+
+static uint8_t *cell(int8_t y, int8_t x)
+{
+	return act->base + (uint16_t)ring_row(y) * rowbytes + x;
 }
 
 static void invert_cell(int8_t y, int8_t x)
@@ -389,9 +633,11 @@ static void invert_cell(int8_t y, int8_t x)
 	blit_wait();
 	for (i = 0; i < 8; i++) {
 		for (k = 0; k < planes; k++)
-			p[k * COLS] ^= 0xFF;
-		p += linebytes;
+			p[k * planebytes] ^= 0xFF;
+		p += COLS;
 	}
+	if (ring_row(y) == 0)
+		guard_sync(act);
 }
 
 void plot_char(int8_t y, int8_t x, uint16_t c)
@@ -411,9 +657,11 @@ void plot_char(int8_t y, int8_t x, uint16_t c)
 			*p = b;
 		else
 			for (k = 0; k < MAXPLANES; k++)
-				p[k * COLS] = (b & fg[k]) | (~b & bg[k]);
-		p += linebytes;
+				p[k * planebytes] = (b & fg[k]) | (~b & bg[k]);
+		p += COLS;
 	}
+	if (ring_row(y) == 0)
+		guard_sync(act);
 }
 
 /* Ring rows r to r + n - 1 (no wrap) to the paper colour: one blit a
@@ -430,11 +678,13 @@ static void blit_clear(uint8_t r, uint8_t n)
 		BLTAFWM = 0xFFFF;
 		BLTALWM = 0xFFFF;
 		BLTADAT = bg[k] ? 0xFFFF : 0;
-		BLTDMOD = linebytes - COLS;
-		BLTDPTH = (uint32_t)(p + k * COLS) >> 16;
-		BLTDPTL = (uint32_t)(p + k * COLS) & 0xFFFF;
+		BLTDMOD = 0;
+		BLTDPTH = (uint32_t)(p + k * planebytes) >> 16;
+		BLTDPTL = (uint32_t)(p + k * planebytes) & 0xFFFF;
 		BLTSIZE = ((uint16_t)n * 8) << 6 | (COLS / 2);
 	}
+	if (r == 0)
+		guard_sync(act);
 }
 
 void clear_lines(int8_t y, int8_t ct)
@@ -466,9 +716,11 @@ void clear_across(int8_t y, int8_t x, int16_t l)
 	for (i = 0; i < 8; i++) {
 		for (k = 0; k < planes; k++)
 			for (j = 0; j < l; j++)
-				p[k * COLS + j] = bg[k];
-		p += linebytes;
+				p[k * planebytes + j] = bg[k];
+		p += COLS;
 	}
+	if (ring_row(y) == 0)
+		guard_sync(act);
 }
 
 /* The vt clears the row that comes in afterwards */

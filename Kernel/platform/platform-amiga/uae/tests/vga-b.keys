@@ -1,0 +1,25 @@
+sleep 55
+key Return
+sleep 3
+key Return
+sleep 25
+type root
+key Return
+sleep 4
+type ls -l /bin /usr/bin; free; screenmode </dev/null
+key Return
+sleep 30
+shot vga-b
+amiga F2
+sleep 2
+type root
+key Return
+sleep 4
+type free
+key Return
+sleep 4
+shot vga-c
+amiga F1
+sleep 2
+shot vga-d
+quit

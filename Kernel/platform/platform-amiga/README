@@ -100,9 +100,19 @@ What works
 - PAL and NTSC: an NTSC Amiga (or one switched to NTSC in Kickstart's
   Early Startup menu) gets 640x200, 80x25, and the 60Hz tick; seen
   from the beam at boot. The serial port follows the machine's crystal
+- Screen modes (screenmode): pal, ntsc and vga (640x480, 80x60, 31kHz,
+  16 colours, for a VGA or multisync monitor; AGA only so far: the ECS
+  version showed wrong in both emulators). The choice is kept in /etc/screenmode and set by
+  /etc/rc; a mode needing more memory than the screens have starts with
+  the next boot. Hold the left mouse button while Fuzix starts to keep
+  the Amiga's own mode. Timings from Linux's amifb ("multiscan"). The
+  clock ticks 50 times a second in every mode (spread over the frames).
+  FS-UAE 3.2 shows vga in more than one plane cut short (its old WinUAE
+  core); Amiberry shows it right: uae/run.sh UAE=amiberry
 - Colour: on AGA (A1200/A4000) 16 colours, the vt's ink and paper
-  (ESC b / ESC c, IGRB), bold as bright; four bitplanes fetched 64 bits
-  at a time, so the display leaves the CPU most of the chip bus. Older
+  (ESC b / ESC c, IGRB), bold as bright; four bitplanes (one block
+  each) fetched 64 bits at a time, so the display leaves the CPU most of
+  the chip bus. Older
   chipsets: one bitplane, white on black
 - Scrolling copies nothing: the Copper starts each frame at the top
   text row and wraps to the buffer's start; the blitter clears rows

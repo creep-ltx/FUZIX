@@ -3,7 +3,7 @@ FUZIX_ROOT ?= $(abspath ../../../..)
 USERCPU = 68000
 include $(FUZIX_ROOT)/Target/rules.68000
 
-APPS = keymap fontprefs
+APPS = keymap fontprefs screenmode
 
 all: $(APPS) setup amigaread keymaps
 

@@ -15,6 +15,11 @@
 #   HD=/some/disk.hdf           a copy of that disk image
 #   FLOPPY_SPEED=100            real floppy speed (default 0 = turbo)
 #   KEEP_DISK=1                 keep the disks the last run left
+#   UAE=amiberry                Amiberry instead of FS-UAE (floppy only,
+#                               no hard disk, no serial log): its newer
+#                               WinUAE core shows the 31kHz 640x480 mode
+#                               in more than one plane, FS-UAE's cuts the
+#                               lines short. Its A1200 has a battery clock.
 #   KEYS=<file>                 typed on the Amiga keyboard (uae/vkey):
 #                               lines "sleep N", "type TEXT", "key NAME",
 #                               "ctrl X", "amiga F2", "alt F2",
@@ -86,9 +91,39 @@ python3 "$HERE/serial-tap.py" "$TTY" "$OUT/serial.log" $SCRIPT >"$OUT/tap.out" 2
 TAP=$!
 sleep 1
 
+if [ "${UAE:-}" = amiberry ]; then
+	cat > "$OUT/run.uae" <<EOF
+use_gui=no
+chipset=aga
+chipset_compatible=A1200
+cpu_model=68020
+fpu_model=none
+cpu_24bit_addressing=true
+cpu_multiplier=4
+chipmem_size=4
+bogomem_size=0
+fastmem_size=0
+z3mem_size=0
+kickstart_rom_file=$KICKSTART
+floppy0=$OUT/$ADF
+floppy0type=0
+floppy_speed=$([ "${FLOPPY_SPEED:-0}" = 0 ] && echo 800 || echo 100)
+sound_output=none
+cpu_speed=real
+cpu_compatible=true
+cpu_cycle_exact=true
+cpu_memory_cycle_exact=true
+blitter_cycle_exact=true
+$(printf '%b' "${UAE_EXTRA:-}")
+EOF
+	set -- amiberry -G -f "$OUT/run.uae"
+else
+	set -- fs-uae "$OUT/run.fs-uae"
+fi
+
 before=$(ls "$XDG_RUNTIME_DIR" | grep '^wayland-[0-9]*$' | sort || true)
 WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_HEADLESS_OUTPUTS=1 \
-	timeout "$SECS" cage -- fs-uae "$OUT/run.fs-uae" >"$OUT/uae.log" 2>&1 </dev/null &
+	timeout "$SECS" cage -- "$@" >"$OUT/uae.log" 2>&1 </dev/null &
 EMU=$!
 
 # Find cage's display for grim

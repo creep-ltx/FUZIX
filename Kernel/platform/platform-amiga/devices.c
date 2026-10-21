@@ -83,9 +83,6 @@ void device_init(void)
   blkdev_t *fd;
   uint16_t r;
 
-  /* The clock counts ticks per tenth of a second: 6 at 60Hz */
-  if (ntsc)
-    ticks_per_dsecond = 6;
   rtc_init();
   fd = fd_init();
 

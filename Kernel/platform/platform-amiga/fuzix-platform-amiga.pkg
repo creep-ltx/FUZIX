@@ -3,7 +3,8 @@
 #
 # platform-amiga	the Amiga's own /etc files, put over the shared ones
 #			(read after Standalone's, so basefs has placed them)
-# amiga-setup		setup, keymap, fontprefs, amigaread, the loader
+# amiga-setup		setup, keymap, fontprefs, screenmode, amigaread,
+#			the loader
 # amiga-floppy		the all-on-one-floppy system (-p amiga-floppy)
 package  platform-amiga
 disable-pkg platform-amiga
@@ -55,6 +56,7 @@ if-file  utils/setup
 f 0755 /bin/setup	utils/setup
 f 0755 /bin/keymap	utils/keymap
 f 0755 /bin/fontprefs	utils/fontprefs
+f 0755 /bin/screenmode	utils/screenmode
 d 0755 /usr/lib/fonts
 f 0755 /bin/amigaread	utils/amigaread
 l /bin/amigaread /bin/amigadir

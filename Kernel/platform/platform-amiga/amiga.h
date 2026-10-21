@@ -28,6 +28,20 @@
 #define COLOR(n)	CUSTOM(0x180 + 2 * (n))
 #define DMACONR		CUSTOM(0x002)
 #define LISAID		CUSTOM(0x07C)
+/* ECS/AGA programmable beam (VARBEAMEN) */
+#define HTOTAL		CUSTOM(0x1C0)
+#define HSSTOP		CUSTOM(0x1C2)
+#define HBSTRT		CUSTOM(0x1C4)
+#define HBSTOP		CUSTOM(0x1C6)
+#define VTOTAL		CUSTOM(0x1C8)
+#define VSSTOP		CUSTOM(0x1CA)
+#define VBSTRT		CUSTOM(0x1CC)
+#define VBSTOP		CUSTOM(0x1CE)
+#define BEAMCON0	CUSTOM(0x1DC)
+#define HSSTRT		CUSTOM(0x1DE)
+#define VSSTRT		CUSTOM(0x1E0)
+#define HCENTER		CUSTOM(0x1E2)
+#define DIWHIGH		CUSTOM(0x1E4)
 #define BLTCON0		CUSTOM(0x040)
 #define BLTCON1		CUSTOM(0x042)
 #define BLTAFWM		CUSTOM(0x044)
@@ -59,6 +73,12 @@ void serial_init(void);
 void video_init(void);
 void video_vblank(void);
 extern uint8_t ntsc;
+extern uint32_t colour_clock;		/* 3546895 PAL, 3579545 NTSC */
+extern uint32_t frame_mhz;		/* display frames a second x 1000 */
+extern uint8_t lines_per_ms;		/* 16 at 15kHz, 31 at 31kHz */
+int video_set_mode(uint8_t m, uint8_t boot);
+uint16_t video_get_mode(void);
+uint32_t video_spare(void);
 void vt_switch_init(void);
 void set_active_vt(uint8_t n);
 void set_visible_vt(uint8_t n);

@@ -1,0 +1,13 @@
+wait Enter new date
+key Return
+wait Enter new time
+key Return
+wait login:
+type root
+key Return
+sleep 3
+type screenmode vga; sync; sync
+key Return
+sleep 6
+shot vga-a
+quit

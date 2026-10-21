@@ -68,12 +68,20 @@ void amiga_hw_init(void)
 	kbd_init();
 }
 
-/* Vertical blank: the tick, 50Hz (PAL) or 60Hz (NTSC) */
+/* Vertical blank. The clock wants 50 ticks a second; the display gives
+   about 50 (PAL), 60 (NTSC) or 59 (640x480) frames, so ticks are spread
+   over the frames by the exact rate */
+static uint32_t tick_acc;
+
 void plt_vblank(void)
 {
 	video_vblank();
-	timer_interrupt();
-	fd_timer();
+	tick_acc += TICKSPERSEC * 1000UL;
+	while (tick_acc >= frame_mhz) {
+		tick_acc -= frame_mhz;
+		timer_interrupt();
+		fd_timer();
+	}
 }
 
 void pagemap_init(void)
@@ -93,6 +101,10 @@ void pagemap_init(void)
 		uint32_t fb = (fast_base + 15) & ~15;
 		kmemaddblk((void *)fb, (fast_top & ~15) - fb);
 	}
+	/* What programs get (free, the boot message): not the kernel or
+	   the screens. Room for a larger screen mode is kept until /etc/rc
+	   sets the mode; counted as if the machine's own stays */
+	procmem = (kmemavail() + kmemused() + video_spare()) >> 10;
 
 	kprintf("Motorola 680%s%d processor detected.\n",
 		sysinfo.cpu[1]?"":"0",sysinfo.cpu[1]);

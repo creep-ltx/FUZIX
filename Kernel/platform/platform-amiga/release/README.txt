@@ -20,6 +20,9 @@ WinUAE:  (not tried yet) A1200 with Kickstart 3.1. Hard drives: Add
 Log in as root. Four screens, each with its own login: Amiga+F1 to F4
 (the left Windows key in FS-UAE, which keeps left Alt for itself).
 PAL and NTSC Amigas both work: NTSC gives 80x25 instead of 80x32.
+With a VGA or multisync monitor (A1200 or A4000): screenmode vga gives
+640x480, 80x60, from the next start. If the screen stays black, hold the
+left mouse button while Fuzix starts, then type screenmode pal.
 Commands: keymap (keyboard layout), fontprefs (FUZIX's
 font or the ROM's Topaz), setup, and the usual Unix tools.
 
