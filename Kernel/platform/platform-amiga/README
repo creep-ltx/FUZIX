@@ -57,7 +57,13 @@ whole install unattended: empty disk, install floppy, Extras disks.
 What works
 ----------
 - Screen: 640x256 PAL hires, one bitplane, 80x32 text (tty1)
-- Keyboard: CIA-A serial, US layout, cursor keys, Ctrl, Shift, Caps
+- Keyboard: CIA-A serial; every AmigaOS keymap (keymap command; Shift,
+  Alt, Caps Lock, dead keys), US built in; cursor keys, F1-F10, Help.
+  The keymaps are converted at build time from a Devs/Keymaps folder of
+  your own Workbench: make ... AMIGA_KEYMAPS=<that folder>
+- Battery clock: MSM6242 or RP5C01 at $DC0000 (A500+/A600/A2000/A3000/
+  A4000, clock-port and accelerator clocks) as /dev/rtc: no date and
+  time questions at boot; a time set with setdate is saved to it
 - Serial: Paula on tty2, kernel messages mirrored there at 9600 baud
 - Timer: vertical blank, 50Hz
 - IDE: Gayle (A1200/A600) through the generic devide driver, PIO
@@ -71,9 +77,10 @@ What works
 To do
 -----
 - Real A1200 test
-- Other keymaps (Swedish)
+- The V7 shell strips the 8th bit (echo åäö prints eda): an 8-bit
+  clean shell
 - Floppy: DF1-DF3, HD disks, faster writes (write-back cache), the
   drive busy-waits during a transfer (nothing else runs)
 - A500/A2000 (68000, no IDE), A4000 IDE base
-- Mouse, sound, the clock port RTC
+- Mouse, sound
 - NTSC (60Hz tick)
