@@ -58,6 +58,7 @@ extern uint32_t video_base;
 void serial_init(void);
 void video_init(void);
 void video_vblank(void);
+extern uint8_t ntsc;
 void vt_switch_init(void);
 void set_active_vt(uint8_t n);
 void set_visible_vt(uint8_t n);

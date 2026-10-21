@@ -1,0 +1,22 @@
+wait Enter new date
+key Return
+wait Enter new time
+key Return
+wait login:
+type root
+key Return
+sleep 3
+type ls -l /bin; echo the last line
+key Return
+wait the last line
+shot ntsc1
+type date
+key Return
+sleep 2
+shot clock1
+sleep 120
+type date
+key Return
+sleep 2
+shot clock2
+quit

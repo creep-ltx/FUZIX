@@ -45,8 +45,12 @@ uint8_t vtattr_cap;
 static uint8_t curtty, inputtty;
 static struct vt_switch ttysave[MAX_VT];
 
-/* PAL colour clock / baud = SERPER + 1 */
+/* Colour clock / baud = SERPER + 1. The clock is the machine's crystal:
+   an NTSC Agnus or Alice (bit 12 of VPOSR) has the NTSC one, whatever
+   video mode it runs in. */
 #define PAL_CLOCK	3546895UL
+#define NTSC_CLOCK	3579545UL
+static uint32_t colour_clock = PAL_CLOCK;
 
 static const uint32_t baudrate[] = {
 	0, 50, 75, 110, 134, 150, 300, 600, 1200, 2400, 4800, 9600,
@@ -62,7 +66,9 @@ static void serial_putc_polled(uint8_t c)
 
 void serial_init(void)
 {
-	SERPER = PAL_CLOCK / 9600 - 1;
+	if (CUSTOM(0x004) & 0x1000)
+		colour_clock = NTSC_CLOCK;
+	SERPER = colour_clock / 9600 - 1;
 }
 
 /* Output for the system console (kprintf etc) */
@@ -138,7 +144,7 @@ void tty_setup(uint8_t minor, uint8_t flags)
 	baud = t->c_cflag & CBAUD;
 	if (baud == B0 || baud > B115200)
 		baud = B9600;
-	SERPER = PAL_CLOCK / baudrate[baud] - 1;
+	SERPER = colour_clock / baudrate[baud] - 1;
 	t->c_cflag &= ~CBAUD;
 	t->c_cflag |= baud;
 }

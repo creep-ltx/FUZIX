@@ -1,7 +1,8 @@
 /*
- *	Text screens: 640x256 PAL hires, 80x32 characters of 8x8, one per
- *	virtual console (tty1-tty4), all at the top of chip RAM. The Copper
- *	shows one of them; Amiga+F1..F4 picks which.
+ *	Text screens: 640x256 PAL hires, 80x32 characters of 8x8 (640x200
+ *	and 80x25 on NTSC), one per virtual console (tty1-tty4), all at the
+ *	top of chip RAM. The Copper shows one of them; Amiga+F1..F4 picks
+ *	which.
  *
  *	AGA machines get four bitplanes (16 colours, the vt's ink and paper)
  *	fetched 64 bits at a time, so the display leaves the CPU most of the
@@ -10,7 +11,7 @@
  *	The planes of a line lie one after the other (interleaved), so a
  *	character cell is a column of bytes, one per plane and line.
  *
- *	Scrolling copies nothing: each screen is a ring of 32 text rows and
+ *	Scrolling copies nothing: each screen is a ring of text rows and
  *	the Copper starts the display at the top row, then jumps back to
  *	the buffer's start where the ring wraps. Clearing rows is the
  *	blitter's job.
@@ -21,11 +22,13 @@
 #include "amiga.h"
 
 #define COLS		80
-#define ROWS		32
+#define ROWS		vt_rows
 #define MAXPLANES	4
 #define COPWORDS	48		/* one Copper list */
 
 uint32_t video_base;
+uint8_t ntsc;				/* 60Hz, 200 lines */
+uint8_t vt_rows = 32;			/* 25 on NTSC */
 
 static uint8_t planes;			/* 4 on AGA, else 1 */
 static uint16_t linebytes;		/* one pixel line, every plane */
@@ -261,11 +264,36 @@ static uint8_t is_aga(void)
 	return 1;
 }
 
+/* The beam's last line: 312 on PAL, 262 on NTSC. That is the machine's
+   own video, or on ECS and AGA what Kickstart was told (Early Startup's
+   display option): the chips stay as AmigaOS left them. */
+static uint8_t is_ntsc(void)
+{
+	volatile uint32_t *vpos = (volatile uint32_t *)0xDFF004;
+	uint16_t v, last = 0, max = 0;
+	uint8_t wraps = 0;
+	uint32_t i;
+
+	/* Two frames' worth (a long and a short one when interlaced) */
+	for (i = 0; i < 1000000UL && wraps < 3; i++) {
+		v = (*vpos >> 8) & 0x1FF;
+		if (v < last)
+			wraps++;
+		else if (wraps && v > max)
+			max = v;
+		last = v;
+	}
+	return max && max < 280;
+}
+
 void video_init(void)
 {
 	uint32_t *p, n;
 	uint16_t i;
 
+	ntsc = is_ntsc();
+	if (ntsc)
+		vt_rows = 25;
 	planes = is_aga() ? 4 : 1;
 	linebytes = COLS * planes;
 	rowbytes = linebytes * 8;
@@ -302,7 +330,7 @@ void video_init(void)
 	BPL1MOD = linebytes - COLS;
 	BPL2MOD = linebytes - COLS;
 	DIWSTRT = 0x2C81;
-	DIWSTOP = 0x2CC1;
+	DIWSTOP = ntsc ? 0xF4C1 : 0x2CC1;	/* 200 or 256 lines */
 	if (planes == 4)
 		for (i = 0; i < 16; i++)
 			COLOR(i) = igrb(i);

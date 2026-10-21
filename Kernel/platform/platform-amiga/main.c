@@ -68,7 +68,7 @@ void amiga_hw_init(void)
 	kbd_init();
 }
 
-/* Vertical blank: the 50Hz tick */
+/* Vertical blank: the tick, 50Hz (PAL) or 60Hz (NTSC) */
 void plt_vblank(void)
 {
 	video_vblank();
@@ -81,7 +81,8 @@ void pagemap_init(void)
 	extern uint8_t _end;
 	uint32_t e = ((uint32_t)&_end + 15) & ~15;
 
-	kprintf("Commodore Amiga, %dK chip RAM", chip_top >> 10);
+	kprintf("Commodore Amiga, %s, %dK chip RAM", ntsc ? "NTSC" : "PAL",
+		chip_top >> 10);
 	if (fast_top > fast_base)
 		kprintf(", %dK fast RAM", (fast_top - fast_base) >> 10);
 	kputs("\n");

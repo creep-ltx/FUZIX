@@ -26,7 +26,8 @@
 #define UDATA_SIZE	1024
 #define UDATA_BLKS	2
 
-/* Vertical blank: 50Hz on PAL, 60Hz on NTSC (we assume PAL) */
+/* Vertical blank: 50Hz on PAL; on NTSC (60Hz) device_init sets
+   ticks_per_dsecond to 6 */
 #define TICKSPERSEC 50
 
 /* Four screens on tty1-tty4 (Amiga+F1..F4), Paula serial on tty5 */
@@ -36,9 +37,10 @@
 #define SERIAL_TTY	5
 #define CONFIG_FONT8X8
 #define VT_WIDTH	80
-#define VT_HEIGHT	32
+#define VT_HEIGHT	vt_rows		/* 32 on PAL, 25 on NTSC */
 #define VT_RIGHT	79
-#define VT_BOTTOM	31
+#define VT_BOTTOM	(vt_rows - 1)
+extern uint8_t vt_rows;
 
 #define BOOT_TTY (512 + 1)	/* tty1: the screen */
 

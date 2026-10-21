@@ -97,6 +97,9 @@ What works
 - Screens: four text consoles, tty1-tty4, each 640x256 PAL hires,
   80x32 characters, each with its own login; Amiga+F1..F4 switches
   (like flipping AmigaOS screens: the Copper shows another one)
+- PAL and NTSC: an NTSC Amiga (or one switched to NTSC in Kickstart's
+  Early Startup menu) gets 640x200, 80x25, and the 60Hz tick; seen
+  from the beam at boot. The serial port follows the machine's crystal
 - Colour: on AGA (A1200/A4000) 16 colours, the vt's ink and paper
   (ESC b / ESC c, IGRB), bold as bright; four bitplanes fetched 64 bits
   at a time, so the display leaves the CPU most of the chip bus. Older
@@ -114,7 +117,7 @@ What works
   A4000, clock-port and accelerator clocks) as /dev/rtc: no date and
   time questions at boot; setdate -w saves the system time to it
 - Serial: Paula on tty5, kernel messages mirrored there at 9600 baud
-- Timer: vertical blank, 50Hz
+- Timer: vertical blank, 50Hz (PAL) or 60Hz (NTSC)
 - IDE: Gayle (A1200/A600) through the generic devide driver, PIO; LBA
   or cylinder/head/sector drives (CONFIG_IDE_AUTO)
 - Partitions: Amiga partition tables (RDB, rdb.c) and PC ones
