@@ -38,8 +38,8 @@ static const char *names[][2] = {
 	{ "dk", "Danish" },
 	{ "n", "Norwegian" },
 	{ "cdn", "Canadian French" },
-	{ "ch1", "Swiss (German)" },
-	{ "ch2", "Swiss (French)" },
+	{ "ch1", "Swiss (French)" },
+	{ "ch2", "Swiss (German)" },
 	{ "po", "Portuguese" },
 	{ "la", "Latin American" },
 	{ "polska", "Polish" },
@@ -77,7 +77,8 @@ static void find_maps(void)
 	if (d == NULL)
 		return;
 	while ((e = readdir(d)) != NULL && nmaps < MAXMAPS) {
-		if (e->d_name[0] == '.')
+		/* keymaps have plain names; COPYING.xkb is the licence */
+		if (strchr(e->d_name, '.'))
 			continue;
 		strlcpy(list[nmaps++], e->d_name, sizeof(list[0]));
 	}

@@ -5,6 +5,32 @@ First target: a stock A1200 (68EC020, 2MB chip RAM, AGA, Gayle IDE,
 Kickstart 3.1). Fast RAM is used when exec reports it. Tested in FS-UAE
 only so far.
 
+Licence
+-------
+Everything here is under the GNU GPL version 2, like the rest of the
+Fuzix kernel (see LICENCE at the top of the tree); the Amiga programs in
+Applications/amiga likewise. Other people's work in it:
+
+- the keymaps on the disks are made at build time from the X keyboard
+  layouts (xkeyboard-config, MIT/X11 licence): mkxkbkeymap.py, notice in
+  COPYING.xkb, which goes onto the disks as /usr/lib/keymaps/COPYING.xkb
+- uae/vkey/virtual-keyboard-unstable-v1.xml is the wlroots protocol file
+  (MIT licence, notice inside); used only by the test tools
+- Fuzix's 8x8 font comes from Linux (GPL), as in every Fuzix port
+
+Nothing from Commodore or Hyperion is in the tree or on the disks.
+Kickstart is the user's own: Fuzix reads the Topaz font from the ROM in
+the machine at run time. mkkeymap.py converts AmigaOS keymap files for
+someone who owns them (make ... AMIGA_KEYMAPS=<folder>); disks built that
+way are for that person only.
+
+The free keymaps follow the AmigaOS ones: the country's layout, ` ~ top
+left, \ | on the key next to Backspace, AmigaOS's Alt layer (Latin-1
+symbols, accents on Alt+F-K). They can differ on a few keys from the
+AmigaOS keymap of the same name (checked against Workbench 3.2.1: Swedish
+on 2 Alt keys, German 5, Danish 6, others more). Polish, Turkish, Greek
+and Russian are not made: the console fonts are Latin-1.
+
 Installing on a real Amiga
 --------------------------
   fuzix-floppy.adf     the install disk; also a whole Fuzix on one floppy
