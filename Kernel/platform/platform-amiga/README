@@ -7,7 +7,20 @@ only so far.
 
 Booting
 -------
-The kernel boots from a floppy (Images/amiga/fuzix.adf). The bootblock
+Two floppies are built:
+
+  fuzix.adf          boot floppy; the root file system is on the IDE disk
+  fuzix-floppy.adf   the whole system on one floppy (no hard disk needed):
+                     bootblock with an MBR partition table, the kernel,
+                     and a 780K Fuzix file system from sector 200 with the
+                     small tool set (Standalone/filesystem-src/
+                     fuzix-amigafloppy.pkg)
+
+If the boot floppy has a Fuzix partition it is the root (hda1); otherwise
+the root is the first IDE disk's first partition (hdb1 while a disk is in
+the drive, hda1 if not).
+
+The kernel boots from a floppy. The bootblock
 (bootblock.S) reads the kernel through trackdisk, notes chip and fast RAM
 from exec's memory list, stops the drive motor, shuts the OS down,
 copies the kernel to $400 and jumps to it. The root file system is the
@@ -26,12 +39,19 @@ What works
 - Serial: Paula on tty2, kernel messages mirrored there at 9600 baud
 - Timer: vertical blank, 50Hz
 - IDE: Gayle (A1200/A600) through the generic devide driver, PIO
+- Floppy: DF0, 880K AmigaDOS-format tracks read and written through
+  Paula's disk DMA (devfd.c); a track cache, whole-track writes; the
+  motor goes off two seconds after the last use
+- Fonts: Fuzix's own 8x8 font, or the Kickstart ROM's Topaz 8 (found in
+  any ROM from 1.3 to 3.2); fontprefs picks one and /etc/rc loads it
 - Boots to login and a shell in FS-UAE, with and without fast RAM
 
 To do
 -----
 - Real A1200 test
-- Other keymaps (Swedish), Latin-1 font (the ROM's Topaz 8, as zenix had)
-- Floppy driver, A500/A2000 (68000, no IDE), A4000 IDE base
+- Other keymaps (Swedish)
+- Floppy: DF1-DF3, HD disks, faster writes (write-back cache), the
+  drive busy-waits during a transfer (nothing else runs)
+- A500/A2000 (68000, no IDE), A4000 IDE base
 - Mouse, sound, the clock port RTC
 - NTSC (60Hz tick)

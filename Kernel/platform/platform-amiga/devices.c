@@ -7,6 +7,7 @@
 #include <tty.h>
 #include <vt.h>
 #include "amiga.h"
+#include "devfd.h"
 
 struct devsw dev_tab[] =  /* The device driver switch table */
 {
@@ -35,7 +36,18 @@ bool validdev(uint16_t dev)
         return true;
 }
 
+unsigned short amiga_root_dev = 0x0001;
+
+/*
+ *	The floppy goes first so that when it carries the root file system
+ *	it is hda. Otherwise the root is the first IDE disk: hda if there is
+ *	no disk in the drive, hdb if there is.
+ */
 void device_init(void)
 {
+  blkdev_t *fd = fd_init();
+
   devide_init();
+  if (fd && !fd->lba_count[0])
+    amiga_root_dev = 0x0011;
 }

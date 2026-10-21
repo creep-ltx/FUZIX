@@ -5,6 +5,7 @@
 #include <devtty.h>
 #include <blkdev.h>
 #include "amiga.h"
+#include "devfd.h"
 
 /* Filled in by crt0.S from what the bootblock found in exec */
 uint32_t chip_top;
@@ -49,6 +50,7 @@ void amiga_hw_init(void)
 void plt_vblank(void)
 {
 	timer_interrupt();
+	fd_timer();
 }
 
 void pagemap_init(void)

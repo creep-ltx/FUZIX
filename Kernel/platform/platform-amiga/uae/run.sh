@@ -6,7 +6,12 @@
 #   KICKSTART=<A1200 3.1 ROM>   required: Kickstart 3.1 r40.068 for the A1200
 #   SHOTS="10 20"               seconds after start to take screenshots
 #   UAE_EXTRA="fast_memory = 8192"   extra config lines (\n separated)
-#   KEEP_DISK=1                 keep the hard disk the last run left
+#   ADF=fuzix-floppy.adf        boot floppy in Images/amiga (default
+#                               fuzix.adf; fuzix-floppy.adf = everything
+#                               on the floppy)
+#   HD=none                     no hard disk
+#   FLOPPY_SPEED=100            real floppy speed (default 0 = turbo)
+#   KEEP_DISK=1                 keep the disks the last run left
 #   KEYS=<file>                 typed on the Amiga keyboard (uae/vkey):
 #                               lines "sleep N", "type TEXT", "key NAME",
 #                               "ctrl X"
@@ -27,18 +32,26 @@ rm -f "$OUT"/*.png "$OUT"/serial.log
 
 # The hard disk is written to: run from a copy (KEEP_DISK=1 reuses the
 # last run's copy, to see what a previous run changed)
+ADF="${ADF:-fuzix.adf}"
 [ -n "${KEEP_DISK:-}" ] && [ -f "$OUT/disk.img" ] || cp "$IMG/disk.img" "$OUT/disk.img"
+[ -n "${KEEP_DISK:-}" ] && [ -f "$OUT/$ADF" ] || cp "$IMG/$ADF" "$OUT/$ADF"
+if [ "${HD:-}" = none ]; then
+	HDCONF=""
+else
+	HDCONF="hard_drive_0 = $OUT/disk.img
+hard_drive_0_controller = ide0
+hard_drive_0_type = hdf"
+fi
 
 TTY="$OUT/serial-pty"
 cat > "$OUT/run.fs-uae" <<EOF
 [fs-uae]
 amiga_model = A1200
 kickstart_file = $KICKSTART
-floppy_drive_0 = $IMG/fuzix.adf
-floppy_drive_speed = 0
-hard_drive_0 = $OUT/disk.img
-hard_drive_0_controller = ide0
-hard_drive_0_type = hdf
+floppy_drive_0 = $OUT/$ADF
+floppy_drive_speed = ${FLOPPY_SPEED:-0}
+writable_floppy_images = 1
+$HDCONF
 serial_port = $TTY
 uae_serial_direct = true
 fullscreen = 1

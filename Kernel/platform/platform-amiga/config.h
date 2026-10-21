@@ -40,8 +40,12 @@
 #define BOOT_TTY (512 + 1)	/* tty1: the screen */
 
 #define CMDLINE	NULL
-/* Root file system on the first partition of the IDE disk */
-#define BOOTDEVICE	0x0001
+/* Root file system: the boot floppy's Fuzix partition if it has one,
+   else the first partition of the IDE disk (set by device_init) */
+#ifndef __ASSEMBLER__
+extern unsigned short amiga_root_dev;
+#endif
+#define BOOTDEVICE	amiga_root_dev
 
 /* Device parameters */
 #define NUM_DEV_TTY 2
@@ -50,7 +54,7 @@
 #define NBUFS    16       /* Number of block buffers */
 #define NMOUNTS	 8	  /* Number of mounts at a time */
 
-#define MAX_BLKDEV 2
+#define MAX_BLKDEV 3
 
 #define CONFIG_IDE
 

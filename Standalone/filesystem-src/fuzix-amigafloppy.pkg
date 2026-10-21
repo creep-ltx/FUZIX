@@ -1,0 +1,30 @@
+# The Amiga's all-on-one-floppy system: the mini set plus everyday tools,
+# within the 780K left on an 880K disk after the bootblock and kernel.
+package  amiga-floppy
+
+disable-pkg ALL amiga-floppy
+enable-pkg basefs util-mini V7-cmd-micro V7-sh amiga-floppy-extra
+
+package  amiga-floppy-extra
+
+f 0755 /bin/fontprefs	../../Applications/util/fontprefs
+f 0755 /bin/more	../../Applications/util/more
+f 0755 /bin/uname	../../Applications/util/uname
+f 0755 /bin/free	../../Applications/util/free
+f 0755 /bin/head	../../Applications/util/head
+f 0755 /bin/tail	../../Applications/util/tail
+f 0755 /bin/wc		../../Applications/util/wc
+f 0755 /bin/grep	../../Applications/util/grep
+f 0755 /bin/sleep	../../Applications/util/sleep
+f 0755 /bin/which	../../Applications/util/which
+f 0755 /bin/du		../../Applications/util/du
+f 0755 /bin/sort	../../Applications/util/sort
+f 0755 /bin/uniq	../../Applications/util/uniq
+f 0755 /bin/env		../../Applications/util/env
+f 0755 /bin/id		../../Applications/util/id
+f 0755 /bin/who		../../Applications/util/who
+f 0755 /bin/whoami	../../Applications/util/whoami
+f 0755 /bin/passwd	../../Applications/util/passwd
+f 0755 /bin/su		../../Applications/util/su
+f 0755 /bin/tee		../../Applications/util/tee
+f 0755 /bin/banner	../../Applications/util/banner
